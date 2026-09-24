@@ -1,0 +1,574 @@
+---
+
+---
+
+<script is:inline>
+    $(function () {
+        const people = [
+            "Ana Paula Silva",
+            "Ricardo Alves",
+            "Juliana Martins",
+            "Thiago Souza",
+            "Camila Ferreira",
+            "Carlos Mendes",
+            "Eduardo Santos",
+            "Lanna Souza",
+            "Marcos Lima",
+            "Beatriz Nunes",
+            "Rafael Costa",
+            "Patrícia Gomes",
+        ];
+
+        let currentScale = "month";
+        let compareBaseline = false;
+        let baselineSaved = false;
+        let nextId = 20;
+
+        const state = {
+            tasks: [
+                { id: 1, no: "1", name: "Planejamento e Mobilização", group: true, owner: "", planned: ["2026-01-01", "2026-02-19"], real: ["", ""], pred: "", progress: null },
+                { id: 2, no: "1.1", name: "Levantamento de Requisitos", owner: "Ana Paula Silva", planned: ["2026-01-15", "2026-02-19"], real: ["2026-01-16", "2026-02-18"], pred: "", progress: 100 },
+                { id: 3, no: "2", name: "Implementação Módulo Financeiro", group: true, owner: "", planned: ["2026-02-20", "2026-09-25"], real: ["", ""], pred: "", progress: null },
+                { id: 4, no: "2.1", name: "Integração Bancária", owner: "Ricardo Alves", planned: ["2026-06-10", "2026-09-25"], real: ["2026-03-20", ""], pred: "", progress: 30, critical: true, overdue: true },
+                { id: 5, no: "3", name: "Implementação Módulo RH", group: true, owner: "", planned: ["2026-09-26", "2026-12-28"], real: ["", ""], pred: "", progress: null },
+                { id: 6, no: "3.1", name: "Folha de Pagamento", owner: "Thiago Souza", planned: ["2026-09-26", "2026-11-10"], real: ["", ""], pred: "2.1", progress: 0 },
+                { id: 7, no: "3.2", name: "Gestão de Ponto e Jornada", owner: "Thiago Souza", planned: ["2026-11-11", "2026-12-28"], real: ["", ""], pred: "3.1", progress: 0 },
+                { id: 8, no: "4", name: "Go-Live e Sustentação", group: true, owner: "", planned: ["2026-12-29", "2027-02-12"], real: ["", ""], pred: "", progress: null },
+                { id: 9, no: "4.1", name: "Treinamento de Usuários", owner: "Camila Ferreira", planned: ["2026-12-29", "2027-02-11"], real: ["", ""], pred: "3.2", progress: 0 },
+                { id: 10, no: "4.2", name: "Go-Live Produção", owner: "Ana Paula Silva", planned: ["2027-02-12", "2027-02-12"], real: ["", ""], pred: "4.1", progress: 0 },
+                { id: 11, no: "4.3", name: "Nova atividade", owner: "", planned: ["2026-08-18", "2026-08-25"], real: ["", ""], pred: "", progress: 0 },
+            ],
+        };
+
+        function escapeHtml(value) {
+            return String(value ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
+        }
+
+        function parseDate(s) {
+            if (!s) return null;
+            const [y, m, d] = s.split("-").map(Number);
+            return new Date(y, m - 1, d);
+        }
+
+        function formatDate(s) {
+            if (!s) return "";
+            const d = parseDate(s);
+            return String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + d.getFullYear();
+        }
+
+        function toISO(d) {
+            return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+        }
+
+        function addDays(date, days) {
+            const d = new Date(date);
+            d.setDate(d.getDate() + days);
+            return d;
+        }
+
+        function startOfWeek(d) {
+            const x = new Date(d);
+            const day = x.getDay();
+            const diff = day === 0 ? -6 : 1 - day;
+            x.setDate(x.getDate() + diff);
+            x.setHours(0, 0, 0, 0);
+            return x;
+        }
+
+        function startOfMonth(d) {
+            return new Date(d.getFullYear(), d.getMonth(), 1);
+        }
+
+        function startOfYear(d) {
+            return new Date(d.getFullYear(), 0, 1);
+        }
+
+        function diffDays(a, b) {
+            return Math.round((b - a) / 86400000);
+        }
+
+        function rangeForScale() {
+            let min = new Date(2026, 0, 1);
+            let max = new Date(2027, 1, 28);
+
+            state.tasks.forEach((t) => {
+                (t.planned || []).concat(t.real || []).forEach((s) => {
+                    const d = parseDate(s);
+                    if (!d) return;
+                    if (d < min) min = new Date(d);
+                    if (d > max) max = new Date(d);
+                });
+            });
+
+            if (currentScale === "week") {
+                min = startOfWeek(addDays(min, -14));
+                max = startOfWeek(addDays(max, 14));
+                max = addDays(max, 6);
+            } else if (currentScale === "month") {
+                min = startOfMonth(addDays(min, -20));
+                max = new Date(max.getFullYear(), max.getMonth() + 2, 0);
+            } else {
+                min = startOfYear(addDays(min, -60));
+                max = new Date(max.getFullYear() + 1, 11, 31);
+            }
+
+            return { min, max };
+        }
+
+        function unitConfig() {
+            if (currentScale === "week") {
+                return { unitDays: 7, width: 90 };
+            }
+            if (currentScale === "year") {
+                return { unitDays: 365, width: 220 };
+            }
+            return { unitDays: 30, width: 110 };
+        }
+
+        function periods() {
+            const { min, max } = rangeForScale();
+            const cfg = unitConfig();
+            const arr = [];
+
+            if (currentScale === "week") {
+                let d = startOfWeek(min);
+                while (d <= max) {
+                    arr.push({
+                        start: new Date(d),
+                        end: addDays(d, 6),
+                        label: "Sem. " + getISOWeek(d) + " / " + String(d.getFullYear()).slice(-2),
+                    });
+                    d = addDays(d, 7);
+                }
+            } else if (currentScale === "month") {
+                let d = startOfMonth(min);
+                while (d <= max) {
+                    arr.push({
+                        start: new Date(d),
+                        end: new Date(d.getFullYear(), d.getMonth() + 1, 0),
+                        label: d.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""),
+                    });
+                    d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+                }
+            } else {
+                let d = startOfYear(min);
+                while (d <= max) {
+                    arr.push({
+                        start: new Date(d),
+                        end: new Date(d.getFullYear(), 11, 31),
+                        label: String(d.getFullYear()),
+                    });
+                    d = new Date(d.getFullYear() + 1, 0, 1);
+                }
+            }
+
+            return { arr, min, max, cfg };
+        }
+
+        function getISOWeek(date) {
+            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            const dayNum = d.getUTCDay() || 7;
+            d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+            return Math.ceil(((d - yearStart) / 86400000 + 1) / 7);
+        }
+
+        function timelineWidth() {
+            const p = periods();
+            return p.arr.length * p.cfg.width;
+        }
+
+        function positionForDate(s) {
+            const p = periods();
+            const d = parseDate(s);
+            if (!d) return 0;
+            return (diffDays(p.min, d) / p.cfg.unitDays) * p.cfg.width;
+        }
+
+        function widthForRange(start, end) {
+            if (!start || !end) return 0;
+            const a = parseDate(start),
+                b = parseDate(end);
+            if (!a || !b) return 0;
+            return Math.max(6, ((diffDays(a, b) + 1) / unitConfig().unitDays) * unitConfig().width);
+        }
+
+        function ownerOptions(selected) {
+            let html = '<option value="">—</option>';
+            people.forEach((p) => {
+                html += '<option value="' + escapeHtml(p) + '"' + (p === selected ? " selected" : "") + ">" + escapeHtml(p) + "</option>";
+            });
+            return html;
+        }
+
+        function predecessorOptions(selected) {
+            let html = '<option value="">Nenhuma</option>';
+            state.tasks
+                .filter((t) => !t.group)
+                .forEach((t) => {
+                    html += '<option value="' + escapeHtml(t.no) + '"' + (t.no === selected ? " selected" : "") + ">" + escapeHtml(t.no + " — " + t.name) + "</option>";
+                });
+            return html;
+        }
+
+        function renderLeft() {
+            const visible = {
+                owner: $(".column-toggle[value='owner']").is(":checked"),
+                planned: $(".column-toggle[value='planned']").is(":checked"),
+                real: $(".column-toggle[value='real']").is(":checked"),
+                predecessors: $(".column-toggle[value='predecessors']").is(":checked"),
+                progress: $(".column-toggle[value='progress']").is(":checked"),
+            };
+
+            $(".col-owner").toggle(visible.owner);
+            $(".col-planned").toggle(visible.planned);
+            $(".col-real").toggle(visible.real);
+            $(".col-predecessors").toggle(visible.predecessors);
+            $(".col-progress").toggle(visible.progress);
+
+            const $body = $("#leftBody").empty();
+
+            state.tasks.forEach((t) => {
+                const cls = t.group ? "group-row" : "child";
+                const progress = t.progress == null ? "—" : t.progress;
+
+                $body.append(`
+        <tr class="${cls}" data-id="${t.id}">
+          <td class="text-center text-secondary">${escapeHtml(t.no)}</td>
+          <td class="activity-cell">
+            <div class="d-flex align-items-center gap-1">
+              <input class="activity-input" data-field="name"
+                     value="${escapeHtml(t.name)}"
+                     ${t.group ? 'style="font-weight:600"' : ""}>
+              ${t.critical ? '<i class="bi bi-exclamation-triangle-fill status-critical" title="Crítico"></i>' : ""}
+              ${t.overdue ? '<i class="bi bi-fire status-overdue" title="Atrasado"></i>' : ""}
+            </div>
+          </td>
+          <td class="col-owner">
+            ${t.group ? "<span>—</span>" : '<select class="owner-select" data-field="owner">' + ownerOptions(t.owner) + "</select>"}
+          </td>
+          <td class="col-planned">
+            ${t.group ? "<span>—</span>" : dateRangeHtml(t, "planned")}
+          </td>
+          <td class="col-real">
+            ${t.group ? "<span>—</span>" : dateRangeHtml(t, "real")}
+          </td>
+          <td class="col-predecessors">
+            ${t.group ? "<span>—</span>" : '<select class="pred-select" data-field="pred">' + predecessorOptions(t.pred) + "</select>"}
+          </td>
+          <td class="col-progress">
+            <input type="number" min="0" max="100" class="progress-input"
+                   data-field="progress" value="${t.progress == null ? 0 : t.progress}"
+                   ${t.group ? "disabled" : ""}>
+          </td>
+          <td class="text-center actions-cell">
+            <button type="button" class="delete-btn" data-delete="${t.id}" title="Excluir">
+              <i class="bi bi-trash3"></i>
+            </button>
+          </td>
+        </tr>
+      `);
+            });
+
+            syncLeftWidth();
+
+            // Depois de mostrar/ocultar colunas, o header continua na mesma posição
+            // horizontal das TDs.
+            $("#leftHeaderScroll").scrollLeft($("#leftScroll").scrollLeft());
+        }
+
+        function dateRangeHtml(task, field) {
+            const values = task[field] || ["", ""];
+            return `
+      <div class="date-range">
+        <input type="date" data-field="${field}" data-index="0" value="${values[0] || ""}">
+        <span class="text-secondary">–</span>
+        <input type="date" data-field="${field}" data-index="1" value="${values[1] || ""}">
+      </div>`;
+        }
+
+        function renderTimeline() {
+            const p = periods();
+            const width = timelineWidth();
+
+            $("#timelineHeader, #timelineBody").css({
+                "--timeline-width": width + "px",
+                "--unit-width": p.cfg.width + "px",
+            });
+
+            let header = '<div class="timeline-header">';
+            p.arr.forEach((period, i) => {
+                header += `
+        <div class="period-label" style="left:${i * p.cfg.width}px;width:${p.cfg.width}px">
+          ${escapeHtml(period.label)}
+        </div>`;
+            });
+            header += "</div>";
+            $("#timelineHeader").html(header);
+
+            const $body = $("#timelineBody").empty();
+
+            state.tasks.forEach((t) => {
+                const row = $('<div class="timeline-row"></div>');
+                if (t.group) row.addClass("group");
+
+                const grid = $('<div class="timeline-grid"></div>');
+                p.arr.forEach(() => grid.append("<span></span>"));
+                row.append(grid);
+
+                if (t.planned && t.planned[0] && t.planned[1]) {
+                    const left = positionForDate(t.planned[0]);
+                    const widthTask = widthForRange(t.planned[0], t.planned[1]);
+
+                    if (compareBaseline && t.baseline) {
+                        const baseLeft = positionForDate(t.baseline[0]);
+                        const baseWidth = widthForRange(t.baseline[0], t.baseline[1]);
+                        row.append(
+                            $('<span class="bar baseline-bar" title="Linha de base"></span>').css({
+                                left: baseLeft,
+                                width: baseWidth,
+                            }),
+                        );
+                    }
+
+                    const bar = $('<button type="button" class="bar ' + (t.group ? "group-bar" : "task-bar") + (t.critical ? " critical" : "") + (t.overdue ? " overdue" : "") + '"></button>');
+
+                    bar.css({ left: left, width: widthTask });
+                    bar.attr("title", t.name + " — " + (t.progress == null ? 100 : t.progress) + "%");
+
+                    if (!t.group) {
+                        const fill = $('<span class="progress-fill"></span>').css({
+                            width: Math.max(0, Math.min(100, t.progress || 0)) + "%",
+                        });
+                        bar.append(fill);
+                    }
+
+                    row.append(bar);
+                }
+
+                $body.append(row);
+            });
+        }
+
+        function syncLeftWidth() {
+            // Permite que a tabela esquerda tenha scroll horizontal se as colunas
+            // selecionadas excederem a largura do bloco congelado.
+            const checkedCount = $(".column-toggle:checked").length;
+            const width = 48 + 230 + (checkedCount >= 1 ? 125 : 0) + (checkedCount >= 2 ? 205 : 0) + (checkedCount >= 3 ? 205 : 0) + (checkedCount >= 4 ? 120 : 0) + (checkedCount >= 5 ? 58 : 0) + 46;
+
+            $(".left-table").css("min-width", Math.max(760, width) + "px");
+            $("#leftHeaderScroll .left-table").css("width", Math.max(760, width) + "px");
+            $("#leftScroll .left-table").css("width", Math.max(760, width) + "px");
+        }
+
+        function renderAll() {
+            renderLeft();
+            renderTimeline();
+        }
+
+        // Atualiza dados sem precisar reconstruir a linha inteira.
+        $("#leftBody").on("input change", "[data-field]", function () {
+            const $el = $(this);
+            const id = Number($el.closest("tr").data("id"));
+            const task = state.tasks.find((t) => t.id === id);
+            if (!task) return;
+
+            const field = $el.data("field");
+
+            if (field === "name" || field === "owner" || field === "pred") {
+                task[field] = $el.val();
+            }
+
+            if (field === "progress") {
+                task.progress = Math.max(0, Math.min(100, Number($el.val()) || 0));
+                renderTimeline();
+            }
+
+            if (field === "planned" || field === "real") {
+                const index = Number($el.data("index"));
+                task[field][index] = $el.val();
+                renderTimeline();
+            }
+        });
+
+        let deleteTaskId = null;
+        const deleteModal = bootstrap.Modal.getOrCreateInstance(document.getElementById("deleteActivityModal"));
+
+        $("#leftBody").on("click", "[data-delete]", function () {
+            deleteTaskId = Number($(this).data("delete"));
+
+            const task = state.tasks.find((t) => t.id === deleteTaskId);
+            if (!task) return;
+
+            $("#deleteActivityName").text(task.no + " — " + task.name);
+            deleteModal.show();
+        });
+
+        $("#btnConfirmDelete").on("click", function () {
+            if (deleteTaskId === null) return;
+
+            state.tasks = state.tasks.filter((t) => t.id !== deleteTaskId);
+
+            // Mantém a sequência da coluna # depois da exclusão.
+            renumberTasks();
+
+            deleteTaskId = null;
+            deleteModal.hide();
+            renderAll();
+        });
+
+        $(".column-toggle").on("change", renderLeft);
+
+        $("[data-scale]").on("click", function () {
+            currentScale = $(this).data("scale");
+            $("[data-scale]").removeClass("active");
+            $(this).addClass("active");
+            renderTimeline();
+        });
+
+        $("#btnAdd").on("click", function () {
+            const last = state.tasks[state.tasks.length - 1];
+            const newTask = {
+                id: nextId++,
+                no: nextActivityNumber(),
+                name: "Nova atividade",
+                owner: "",
+                planned: ["2026-09-01", "2026-09-08"],
+                real: ["", ""],
+                pred: last && !last.group ? last.no : "",
+                progress: 0,
+            };
+
+            state.tasks.push(newTask);
+            renumberTasks();
+            renderAll();
+
+            setTimeout(() => {
+                const $row = $('#leftBody tr[data-id="' + newTask.id + '"]');
+                $("#leftScroll").scrollTop($("#leftScroll")[0].scrollHeight);
+                $row.find(".activity-input").trigger("focus").select();
+            }, 20);
+        });
+
+        function renumberTasks() {
+            let groupNumber = 0;
+            let childNumber = 0;
+
+            state.tasks.forEach((task) => {
+                if (task.group) {
+                    groupNumber++;
+                    childNumber = 0;
+                    task.no = String(groupNumber);
+                } else {
+                    // Se não houver grupo anterior, cria uma numeração de atividade simples.
+                    if (groupNumber === 0) {
+                        task.no = String(state.tasks.indexOf(task) + 1);
+                        return;
+                    }
+
+                    childNumber++;
+                    task.no = groupNumber + "." + childNumber;
+                }
+            });
+        }
+
+        function nextActivityNumber() {
+            // Nova atividade entra no último grupo existente.
+            let lastGroupNumber = 0;
+            let childNumber = 0;
+
+            for (let i = 0; i < state.tasks.length; i++) {
+                const task = state.tasks[i];
+
+                if (task.group) {
+                    lastGroupNumber = Number(task.no) || lastGroupNumber + 1;
+                    childNumber = 0;
+                } else if (lastGroupNumber > 0) {
+                    childNumber++;
+                }
+            }
+
+            return lastGroupNumber > 0 ? lastGroupNumber + "." + (childNumber + 1) : String(state.tasks.length + 1);
+        }
+
+        $("#btnSaveBaseline").on("click", function () {
+            state.tasks.forEach((t) => {
+                if (t.planned) t.baseline = [...t.planned];
+            });
+            baselineSaved = true;
+            compareBaseline = true;
+            $("#btnCompare").addClass("baseline-active");
+            renderTimeline();
+
+            $(this).html('<i class="bi bi-check-circle me-1"></i>Linha de base salva');
+            setTimeout(() => {
+                $("#btnSaveBaseline").html('<i class="bi bi-shield-check me-1"></i>Salvar linha de base');
+            }, 1800);
+        });
+
+        $("#btnCompare").on("click", function () {
+            if (!baselineSaved) {
+                alert("Salve a linha de base primeiro.");
+                return;
+            }
+            compareBaseline = !compareBaseline;
+            $(this).toggleClass("baseline-active", compareBaseline);
+            renderTimeline();
+        });
+
+        $("#btnPrev").on("click", function () {
+            $("#rightScroll").animate({ scrollLeft: Math.max(0, $("#rightScroll").scrollLeft() - 500) }, 250);
+        });
+
+        $("#btnNext").on("click", function () {
+            $("#rightScroll").animate({ scrollLeft: $("#rightScroll")[0].scrollLeft + 500 }, 250);
+        });
+
+        // Sincroniza somente o eixo horizontal do cabeçalho com o corpo da timeline.
+        $("#rightScroll").on("scroll", function () {
+            $("#rightHeaderScroll").scrollLeft(this.scrollLeft);
+        });
+
+        // Sincroniza o scroll vertical entre o bloco congelado e o timeline.
+        let syncing = false;
+
+        $("#leftScroll").on("scroll", function () {
+            if (syncing) return;
+            syncing = true;
+            $("#rightScroll").scrollTop(this.scrollTop);
+            syncing = false;
+        });
+
+        $("#rightScroll").on("scroll", function () {
+            if (syncing) return;
+            syncing = true;
+            $("#leftScroll").scrollTop(this.scrollTop);
+            syncing = false;
+            $("#rightHeaderScroll").scrollLeft(this.scrollLeft);
+        });
+
+        // IMPORTANTE:
+        // O bloco esquerdo tem um header separado das TDs. Portanto,
+        // quando o usuário move o scrollbar horizontal das colunas,
+        // movemos o header exatamente para o mesmo scrollLeft.
+        $("#leftScroll").on("scroll", function () {
+            $("#leftHeaderScroll").scrollLeft(this.scrollLeft);
+        });
+
+        // Altura igual dos dois blocos.
+        function syncHeights() {
+            const left = $("#leftScroll")[0];
+            const right = $("#rightScroll")[0];
+            if (!left || !right) return;
+            right.scrollTop = left.scrollTop;
+        }
+
+        renumberTasks();
+        renderAll();
+        syncHeights();
+    });
+</script>

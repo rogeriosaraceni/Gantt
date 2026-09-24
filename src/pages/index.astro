@@ -1,0 +1,141 @@
+---
+import Layout from "../layouts/Layout.astro";
+import "../styles.css";
+
+import Modal from "./_modal.astro";
+import Scripts from "./_scripts.astro";
+---
+
+<Layout>
+    <div class="d-flex justify-content-between align-items-center flex-wrap gantt-toolbar mb-2">
+        <div class="d-flex align-items-center gap-3 flex-wrap">
+            <div class="btn-group view-switch" role="group" aria-label="Escala">
+                <button type="button" class="btn btn-sm" data-scale="week">Semana</button>
+                <button type="button" class="btn btn-sm active" data-scale="month">Mês</button>
+                <button type="button" class="btn btn-sm" data-scale="year">Ano</button>
+            </div>
+
+            <div class="legend d-flex gap-3 flex-wrap">
+                <span><i class="legend-dot" style="background:#c9c6be"></i>Linha de base</span>
+                <span><i class="legend-dot" style="background:#b07a2e"></i>Crítico</span>
+                <span><i class="legend-dot" style="background:#8a2432"></i>Atrasado</span>
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <div class="dropdown">
+                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="bi bi-funnel me-1"></i>Colunas
+                </button>
+                <div class="dropdown-menu dropdown-menu-end shadow-sm p-2 column-menu">
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" value="owner" id="colOwner" checked />
+                        <label class="form-check-label" for="colOwner">Responsável</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" value="planned" id="colPlanned" checked />
+                        <label class="form-check-label" for="colPlanned">Planejado</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" value="real" id="colReal" checked />
+                        <label class="form-check-label" for="colReal">Real</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" value="predecessors" id="colPred" checked />
+                        <label class="form-check-label" for="colPred">Predecessoras</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input column-toggle" type="checkbox" value="progress" id="colProgress" checked />
+                        <label class="form-check-label" for="colProgress">%</label>
+                    </div>
+                    <hr class="my-2" />
+                    <button type="button" class="btn btn-light btn-sm w-100" data-bs-toggle="dropdown">Fechar</button>
+                </div>
+            </div>
+
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnCompare">
+                <i class="bi bi-arrow-up-right me-1"></i>Comparar linha de base
+            </button>
+
+            <button type="button" class="btn btn-sm btn-light" id="btnSaveBaseline">
+                <i class="bi bi-shield-check me-1"></i>Salvar linha de base
+            </button>
+
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnPrev" disabled>
+                <i class="bi bi-chevron-left"></i>
+            </button>
+
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnNext">
+                <i class="bi bi-chevron-right"></i>
+            </button>
+
+            <button type="button" class="btn btn-sm text-white" id="btnAdd" style="background:#8a2432">
+                <i class="bi bi-plus-lg me-1"></i>Incluir atividade
+            </button>
+        </div>
+    </div>
+
+    <div class="gantt-shell">
+        <div class="gantt-layout">
+            <!-- ESQUERDA: BLOCO CONGELADO -->
+            <div class="gantt-left">
+                <div class="gantt-header-left" id="leftHeaderScroll">
+                    <table class="gantt-table left-table">
+                        <colgroup>
+                            <col class="col-num" />
+                            <col class="col-activity" />
+                            <col class="col-owner col-owner" />
+                            <col class="col-planned col-planned" />
+                            <col class="col-real col-real" />
+                            <col class="col-predecessors col-predecessors" />
+                            <col class="col-progress col-progress" />
+                            <col class="col-actions" />
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Atividade</th>
+                                <th class="col-owner">Responsável</th>
+                                <th class="col-planned">Planejado</th>
+                                <th class="col-real">Real</th>
+                                <th class="col-predecessors">Predecessoras</th>
+                                <th class="col-progress">%</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
+
+                <div class="gantt-left-scroll" id="leftScroll">
+                    <table class="gantt-table left-table">
+                        <colgroup>
+                            <col class="col-num" />
+                            <col class="col-activity" />
+                            <col class="col-owner" />
+                            <col class="col-planned" />
+                            <col class="col-real" />
+                            <col class="col-predecessors" />
+                            <col class="col-progress" />
+                            <col class="col-actions" />
+                        </colgroup>
+                        <tbody id="leftBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- DIREITA: TIMELINE -->
+            <div class="gantt-right">
+                <div class="gantt-header-right" id="rightHeaderScroll">
+                    <div class="timeline" id="timelineHeader"></div>
+                </div>
+
+                <div class="gantt-right-scroll" id="rightScroll">
+                    <div class="timeline" id="timelineBody"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <Modal />
+    <Scripts />
+</Layout>

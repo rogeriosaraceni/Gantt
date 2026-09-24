@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link rel="icon" href="/favicon.ico" />
+        <meta name="generator" content={Astro.generator} />
+        <title>Gantt Bootstrap 5 + jQuery</title>
+
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" />
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.css" rel="stylesheet" />
+
+        <script is:inline src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+        <script is:inline src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+    </head>
+    <body>
+        <div class="container-fluid py-3">
+            <slot />
+        </div>
+    </body>
+</html>
+
+<style>
+    :root {
+        --g-border: #e3e3e1;
+        --g-header: #f5f5f4;
+        --g-muted: #6b6b69;
+        --g-text: #211e1c;
+        --g-primary: #8a2432;
+        --g-baseline: #c9c6be;
+        --g-plan: #b7c0c9;
+        --g-critical: #b07a2e;
+        --g-overdue: #8a2432;
+        --row-h: 44px;
+        --header-h: 38px;
+    }
+
+    body {
+        background: #fff;
+        color: var(--g-text);
+        font-size: 13px;
+    }
+</style>
