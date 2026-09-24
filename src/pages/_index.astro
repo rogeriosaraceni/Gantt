@@ -7,21 +7,75 @@ import Scripts from "./_scripts.astro";
 ---
 
 <style>
-.left-table {
-    width: max-content;
-    min-width: 760px;
-}
+    .left-table {
+        width: max-content;
+        min-width: 760px;
+    }
 
-.left-table .col-num          { width: 50px; }
-.left-table .col-activity     { width: 230px; }
-.left-table .col-owner        { width: 130px; }
-.left-table .col-planned      { width: 205px; }
-.left-table .col-real         { width: 205px; }
-.left-table .col-predecessors { width: 120px; }
-.left-table .col-progress     { width: 60px; }
-.left-table .col-actions      { width: 50px; }
+    .left-table .col-num {
+        width: 48px;
+    }
+
+    .left-table col.col-num {
+        width: 48px;
+    }
+
+    .left-table col.col-activity {
+        width: 230px;
+    }
+
+    .left-table col.col-owner {
+        width: 125px;
+    }
+
+    .left-table col.col-planned {
+        width: 205px;
+    }
+
+    .left-table col.col-real {
+        width: 205px;
+    }
+
+    .left-table col.col-predecessors {
+        width: 120px;
+    }
+
+    .left-table col.col-progress {
+        width: 58px;
+    }
+
+    .left-table col.col-actions {
+        width: 46px;
+    }
+
+    .left-table .col-activity {
+        width: 230px;
+    }
+
+    .left-table .col-owner {
+        width: 125px;
+    }
+
+    .left-table .col-planned {
+        width: 205px;
+    }
+
+    .left-table .col-real {
+        width: 205px;
+    }
+
+    .left-table .col-predecessors {
+        width: 120px;
+    }
+
+    .left-table .col-progress {
+        width: 58px;
+    }
+
+    .left-table .col-actions {
+        width: 46px;
+    }
 </style>
-
 
 <Layout>
     <div class="d-flex justify-content-between align-items-center flex-wrap gantt-toolbar mb-2">
@@ -101,11 +155,11 @@ import Scripts from "./_scripts.astro";
                         <colgroup>
                             <col class="col-num" />
                             <col class="col-activity" />
-                            <col class="col-owner" />
-                            <col class="col-planned" />
-                            <col class="col-real" />
-                            <col class="col-predecessors" />
-                            <col class="col-progress" />
+                            <col class="col-owner col-owner" />
+                            <col class="col-planned col-planned" />
+                            <col class="col-real col-real" />
+                            <col class="col-predecessors col-predecessors" />
+                            <col class="col-progress col-progress" />
                             <col class="col-actions" />
                         </colgroup>
 
@@ -113,12 +167,12 @@ import Scripts from "./_scripts.astro";
                             <tr>
                                 <th>#</th>
                                 <th>Atividade</th>
-                                <th>Responsável</th>
-                                <th>Planejado</th>
-                                <th>Real</th>
-                                <th>Predecessoras</th>
-                                <th>%</th>
-                                <th>Del</th>
+                                <th class="col-owner">Responsável</th>
+                                <th class="col-planned">Planejado</th>
+                                <th class="col-real">Real</th>
+                                <th class="col-predecessors">Predecessoras</th>
+                                <th class="col-progress">%</th>
+                                <th class="col-del">Del</th>
                             </tr>
                         </thead>
                     </table>

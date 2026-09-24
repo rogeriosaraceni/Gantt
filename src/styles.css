@@ -163,74 +163,7 @@
     letter-spacing: .04em;
 }
 
-.left-table {
-    width: max-content;
-    min-width: 760px;
-}
 
-.left-table .col-num {
-    width: 48px;
-}
-
-.left-table col.col-num {
-    width: 48px;
-}
-
-.left-table col.col-activity {
-    width: 230px;
-}
-
-.left-table col.col-owner {
-    width: 125px;
-}
-
-.left-table col.col-planned {
-    width: 205px;
-}
-
-.left-table col.col-real {
-    width: 205px;
-}
-
-.left-table col.col-predecessors {
-    width: 120px;
-}
-
-.left-table col.col-progress {
-    width: 58px;
-}
-
-.left-table col.col-actions {
-    width: 46px;
-}
-
-.left-table .col-activity {
-    width: 230px;
-}
-
-.left-table .col-owner {
-    width: 125px;
-}
-
-.left-table .col-planned {
-    width: 205px;
-}
-
-.left-table .col-real {
-    width: 205px;
-}
-
-.left-table .col-predecessors {
-    width: 120px;
-}
-
-.left-table .col-progress {
-    width: 58px;
-}
-
-.left-table .col-actions {
-    width: 46px;
-}
 
 .group-row td {
     background: var(--g-header);
@@ -326,18 +259,6 @@
 .delete-btn:hover {
     color: var(--g-primary);
     background: #f5f3ef;
-}
-
-.actions-cell {
-    position: sticky;
-    right: 0;
-    z-index: 5;
-    background: #fff !important;
-    box-shadow: -4px 0 7px rgba(0, 0, 0, .04);
-}
-
-.group-row .actions-cell {
-    background: var(--g-header) !important;
 }
 
 .delete-btn:hover {
