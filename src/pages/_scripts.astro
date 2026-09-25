@@ -433,6 +433,11 @@
 
             $("#timelineHeader").html(headerHtml);
 
+            $("#timelineBody [data-bs-toggle='tooltip']").each(function () {
+                const tooltipInstance = bootstrap.Tooltip.getInstance(this);
+                if (tooltipInstance) tooltipInstance.dispose();
+            });
+
             const $timelineBody = $("#timelineBody").empty();
 
             state.tasks.forEach((task) => {
@@ -451,25 +456,27 @@
                         const baselineLeft = positionForDate(task.baseline[0]);
                         const baselineWidth = widthForRange(task.baseline[0], task.baseline[1]);
                         rowElement.append(
-                            $(`<span class="bar baseline-bar" title="Linha de base"></span>`).css({
+                            $(`<span class="bar baseline-bar" data-bs-toggle="tooltip" data-bs-title="Linha de base"></span>`).css({
                                 left: baselineLeft,
                                 width: baselineWidth,
                             })
                         );
                     }
 
+                    const taskProgress = task.progress == null ? 100 : task.progress;
+                    const barTitle = `${task.name} — ${taskProgress}%`;
+
                     const taskBar = $(`
                         <button type="button" class="bar
                             ${task.group ? "group-bar" : "task-bar"}
                             ${task.critical ? " critical" : ""}
-                            ${task.overdue ? " overdue" : ""}">
+                            ${task.overdue ? " overdue" : ""}"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="${escapeHtml(barTitle)}">
                         </button>
                     `);
 
-                    const taskProgress = task.progress == null ? 100 : task.progress;
-
                     taskBar.css({ left: taskLeft, width: taskWidth });
-                    taskBar.attr("title", `${task.name} —${taskProgress}%`);
 
                     if (!task.group) {
                         const progressPercentage = Math.max(0, Math.min(100, task.progress || 0));
@@ -483,6 +490,10 @@
                 }
 
                 $timelineBody.append(rowElement);
+            });
+
+            $("#timelineBody [data-bs-toggle='tooltip']").each(function () {
+                new bootstrap.Tooltip(this);
             });
         }
 
