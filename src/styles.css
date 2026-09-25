@@ -1,3 +1,6 @@
+/*-----------------------------------------------------
+gantt-toolbar
+------------------------------------------------------*/
 .gantt-toolbar {
     gap: .5rem;
 }
@@ -8,29 +11,32 @@
     font-size: 12px;
 }
 
+/*-----------------------------------------------------
+view-switch
+------------------------------------------------------*/
 .view-switch {
     background: #edeBE6;
     border-radius: .55rem;
     padding: .2rem;
 }
-
 .view-switch .btn {
     border: 0;
     color: var(--g-muted);
     padding: .35rem .8rem;
 }
-
 .view-switch .btn.active {
     background: #fff;
     color: var(--g-text);
     box-shadow: 0 1px 2px rgba(0, 0, 0, .04);
 }
 
+/*-----------------------------------------------------
+legend
+------------------------------------------------------*/
 .legend {
     color: var(--g-muted);
     font-size: 11px;
 }
-
 .legend-dot {
     display: inline-block;
     width: 10px;
@@ -40,13 +46,15 @@
     vertical-align: -1px;
 }
 
+/*-----------------------------------------------------
+gantt-shell / gantt-layout
+------------------------------------------------------*/
 .gantt-shell {
     border: 1px solid var(--g-border);
     border-radius: .65rem;
     overflow: hidden;
     background: #fff;
 }
-
 .gantt-layout {
     display: flex;
     width: 100%;
@@ -55,7 +63,9 @@
     max-height: calc(100vh - 120px);
 }
 
-/* BLOCO CONGELADO */
+/*-----------------------------------------------------
+gantt-left - BLOCO CONGELADO
+------------------------------------------------------*/
 .gantt-left {
     flex: 0 0 760px;
     width: 760px;
@@ -66,8 +76,14 @@
     display: flex;
     flex-direction: column;
 }
+.gantt-left-scroll .left-table {
+    width: max-content;
+    min-width: 760px;
+}
 
-/* TIMELINE */
+/*-----------------------------------------------------
+gantt-right - TIMELINE
+------------------------------------------------------*/
 .gantt-right {
     flex: 1 1 auto;
     min-width: 0;
@@ -77,11 +93,9 @@
     background: #fff;
 }
 
-.gantt-left-scroll .left-table {
-    width: max-content;
-    min-width: 760px;
-}
-
+/*-----------------------------------------------------
+gantt-scroll
+------------------------------------------------------*/
 .gantt-left-scroll,
 .gantt-right-scroll {
     flex: 1 1 auto;
@@ -91,18 +105,15 @@
     scrollbar-width: thin;
     scrollbar-color: #c9c6be transparent;
 }
-
 .gantt-left-scroll::-webkit-scrollbar,
 .gantt-right-scroll::-webkit-scrollbar {
     width: 6px;
     height: 6px;
 }
-
 .gantt-left-scroll::-webkit-scrollbar-track,
 .gantt-right-scroll::-webkit-scrollbar-track {
     background: transparent;
 }
-
 .gantt-left-scroll::-webkit-scrollbar-thumb,
 .gantt-right-scroll::-webkit-scrollbar-thumb {
     background-color: #c9c6be;
@@ -114,6 +125,9 @@
     background-color: #a8a49c;
 }
 
+/*-----------------------------------------------------
+gantt-table
+------------------------------------------------------*/
 .gantt-table {
     border-collapse: separate;
     border-spacing: 0;
@@ -131,12 +145,10 @@
     white-space: nowrap;
     vertical-align: middle;
 }
-
 .gantt-table th:last-child,
 .gantt-table td:last-child {
     border-right: 0;
 }
-
 .gantt-table th {
     position: sticky;
     top: 0;
@@ -151,8 +163,6 @@
     box-shadow: inset 0 -1px 0 var(--g-border);
 }
 
-
-
 .group-row td {
     background: var(--g-header);
     font-weight: 600;
@@ -160,6 +170,9 @@
 
 .activity-cell {
     min-width: 0;
+}
+.child .activity-cell {
+    padding-left: 26px;
 }
 
 .activity-input {
@@ -171,32 +184,25 @@
     font-size: 12px;
     color: var(--g-text);
 }
-
 .activity-input:focus {
     background: #fff;
     box-shadow: inset 0 -1px 0 var(--g-primary);
 }
 
-.child .activity-cell {
-    padding-left: 26px;
-}
-
+/*-----------------------------------------------------
+date-range
+------------------------------------------------------*/
 .date-range {
     display: flex;
     align-items: center;
-    gap: 4px;
-}
-
-.date-range {
+    gap: 10px;
     width: 100%;
     min-width: 0;
-    gap: 3px;
 }
-
 .date-range input {
-    width: 88px;
-    min-width: 88px;
-    max-width: 88px;
+    width: 77px;
+    min-width: 77px;
+    max-width: 77px;
     border: 0;
     outline: 0;
     background: transparent;
@@ -204,17 +210,18 @@
     color: var(--g-text);
     padding: 0;
 }
-
 .date-range input::-webkit-calendar-picker-indicator {
     margin-left: 0;
     padding: 0;
 }
-
 .date-range input:focus {
     background: #fff;
     box-shadow: inset 0 -1px 0 var(--g-primary);
 }
 
+/*-----------------------------------------------------
+
+------------------------------------------------------*/
 .owner-select,
 .pred-select,
 .progress-input {
@@ -231,6 +238,9 @@
     width: 45px;
 }
 
+/*-----------------------------------------------------
+delete-btn
+------------------------------------------------------*/
 .delete-btn {
     border: 0;
     background: #fff;
@@ -243,23 +253,22 @@
     align-items: center;
     justify-content: center;
 }
-
 .delete-btn:hover {
     color: var(--g-primary);
     background: #f5f3ef;
 }
-
 .delete-btn:hover {
     color: var(--g-primary);
 }
 
-/* Timeline */
+/*-----------------------------------------------------
+Timeline
+------------------------------------------------------*/
 .timeline {
     position: relative;
     width: var(--timeline-width, 1540px);
     min-width: var(--timeline-width, 1540px);
 }
-
 .timeline-header {
     position: sticky;
     top: 0;
@@ -268,14 +277,12 @@
     background: var(--g-header);
     border-bottom: 1px solid var(--g-border);
 }
-
 .timeline-row {
     position: relative;
     height: var(--row-h);
     border-bottom: 1px solid var(--g-border);
     overflow: hidden;
 }
-
 .timeline-row.group {
     background: var(--g-header);
 }
@@ -286,12 +293,14 @@
     display: flex;
     pointer-events: none;
 }
-
 .timeline-grid span {
     flex: 0 0 var(--unit-width, 110px);
     border-right: 1px solid rgba(227, 227, 225, .65);
 }
 
+/*-----------------------------------------------------
+period-label
+------------------------------------------------------*/
 .period-label {
     position: absolute;
     top: 0;
@@ -305,25 +314,25 @@
     white-space: nowrap;
 }
 
+/*-----------------------------------------------------
+bar
+------------------------------------------------------*/
 .bar {
     position: absolute;
     border-radius: 4px;
     cursor: pointer;
     border: 0;
 }
-
 .bar.group-bar {
     top: 16px;
     height: 6px;
     background: #d8d3c8;
 }
-
 .bar.task-bar {
     top: 22px;
     height: 12px;
     background: var(--g-plan);
 }
-
 .bar.task-bar .progress-fill {
     position: absolute;
     inset: 0 auto 0 0;
@@ -336,11 +345,9 @@
     height: 7px;
     background: var(--g-baseline);
 }
-
 .bar.critical {
     background: var(--g-critical);
 }
-
 .bar.overdue {
     background: var(--g-overdue);
 }
@@ -362,25 +369,27 @@
     padding: 12px;
 }
 
+/*-----------------------------------------------------
+column-menu
+------------------------------------------------------*/
 .column-menu {
     min-width: 210px;
 }
-
 .column-menu .form-check {
     padding: .35rem .5rem .35rem 1.8rem;
     border-radius: .35rem;
 }
-
 .column-menu .form-check:hover {
     background: #f5f3ef;
 }
-
 .column-menu .form-check-label {
     cursor: pointer;
     width: 100%;
 }
 
-
+/*-----------------------------------------------------
+modal
+------------------------------------------------------*/
 .delete-modal-icon {
     width: 44px;
     height: 44px;
@@ -396,15 +405,16 @@
 .baseline-active {
     box-shadow: inset 0 -2px 0 var(--g-primary);
 }
-
 .status-critical {
     color: var(--g-critical);
 }
-
 .status-overdue {
     color: var(--g-overdue);
 }
 
+/*-----------------------------------------------------
+@media
+------------------------------------------------------*/
 @media (max-width: 1200px) {
     .gantt-left {
         flex-basis: 680px;

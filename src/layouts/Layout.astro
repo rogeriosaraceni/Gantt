@@ -46,7 +46,8 @@
 <script is:inline>
     $(function () {
         // Seleciona apenas elementos que tenham o atributo title ou data-bs-title preenchidos
-        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"][title]:not([title=""]), [data-bs-toggle="tooltip"][data-bs-title]:not([data-bs-title=""])');
+        const tooltipTriggerList =
+        document.querySelectorAll('[data-bs-toggle="tooltip"][title]:not([title=""]), [data-bs-toggle="tooltip"][data-bs-title]:not([data-bs-title=""])');
 
         const tooltipList = [...tooltipTriggerList].map(
             (tooltipTriggerEl) => new bootstrap.Tooltip(tooltipTriggerEl)

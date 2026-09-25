@@ -1,0 +1,741 @@
+---
+
+---
+
+<script is:inline>
+    $(function () {
+        const responsaveis = [
+            "Ana Paula Silva",
+            "Ricardo Alves",
+            "Juliana Martins",
+            "Thiago Souza",
+            "Camila Ferreira",
+            "Carlos Mendes",
+            "Eduardo Santos",
+            "Lanna Souza",
+            "Marcos Lima",
+            "Beatriz Nunes",
+            "Rafael Costa",
+            "Patrícia Gomes",
+        ];
+
+        let currentScale = "month";
+        let compareBaseline = false;
+        let baselineSaved = false;
+        let nextId = 20;
+
+        const state = {
+            tasks: [
+                {
+                    id: 1,
+                    no: "1",
+                    name: "Planejamento e Mobilização",
+                    group: true,
+                    owner: "",
+                    planned: ["2026-01-01", "2026-02-19"],
+                    real: ["", ""],
+                    pred: "",
+                    progress: null,
+                },
+                {
+                    id: 2,
+                    no: "1.1",
+                    name: "Levantamento de Requisitos",
+                    owner: "Ana Paula Silva",
+                    planned: ["2026-01-15", "2026-02-19"],
+                    real: ["2026-01-16", "2026-02-18"],
+                    pred: "",
+                    progress: 100,
+                },
+
+                {
+                    id: 3,
+                    no: "2",
+                    name: "Implementação Módulo Financeiro",
+                    group: true,
+                    owner: "",
+                    planned: ["2026-02-20", "2026-09-25"],
+                    real: ["", ""],
+                    pred: "",
+                    progress: null,
+                },
+                {
+                    id: 4,
+                    no: "2.1",
+                    name: "Integração Bancária",
+                    owner: "Ricardo Alves",
+                    planned: ["2026-06-10", "2026-09-25"],
+                    real: ["2026-03-20", ""],
+                    pred: "",
+                    progress: 30,
+                    critical: true,
+                    overdue: true,
+                },
+
+                {
+                    id: 5,
+                    no: "3",
+                    name: "Implementação Módulo RH",
+                    group: true,
+                    owner: "",
+                    planned: ["2026-09-26", "2026-12-28"],
+                    real: ["", ""],
+                    pred: "",
+                    progress: null,
+                },
+                {
+                    id: 6,
+                    no: "3.1",
+                    name: "Folha de Pagamento",
+                    owner: "Thiago Souza",
+                    planned: ["2026-09-26", "2026-11-10"],
+                    real: ["", ""],
+                    pred: "2.1",
+                    progress: 0,
+                },
+
+                {
+                    id: 7,
+                    no: "4",
+                    name: "Go-Live e Sustentação",
+                    group: true,
+                    owner: "",
+                    planned: ["2026-12-29", "2027-02-12"],
+                    real: ["", ""],
+                    pred: "",
+                    progress: null,
+                },
+                {
+                    id: 8,
+                    no: "4.1",
+                    name: "Treinamento de Usuários",
+                    owner: "Camila Ferreira",
+                    planned: ["2026-12-29", "2027-02-11"],
+                    real: ["", ""],
+                    pred: "3.2",
+                    progress: 0,
+                },
+            ],
+        };
+
+        function escapeHtml(value) {
+            return String(value ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
+        }
+
+        function parseDate(string) {
+            if (!string) return null;
+            const [y, m, d] = string.split("-").map(Number);
+            return new Date(y, m - 1, d);
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return "";
+
+            const dateObject = parseDate(dateString);
+            const day = String(dateObject.getDate()).padStart(2, "0");
+            const month = String(dateObject.getMonth() + 1).padStart(2, "0");
+            const year = dateObject.getFullYear();
+
+            return `${day}/${month}/${year}`;
+        }
+
+        function toISO(dateObject) {
+            const year = dateObject.getFullYear();
+            const month = String(dateObject.getMonth() + 1).padStart(2, "0");
+            const day = String(dateObject.getDate()).padStart(2, "0");
+
+            return `${year}-${month}-${day}`;
+        }
+
+        function addDays(startDate, daysToAdd) {
+            const resultDate = new Date(startDate);
+            resultDate.setDate(resultDate.getDate() + daysToAdd);
+            return resultDate;
+        }
+
+        function startOfWeek(date) {
+            const mondayDate = new Date(date);
+            const dayOfWeek = mondayDate.getDay();
+            const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+
+            mondayDate.setDate(mondayDate.getDate() + daysToMonday);
+            mondayDate.setHours(0, 0, 0, 0);
+
+            return mondayDate;
+        }
+
+        function startOfMonth(date) {
+            return new Date(date.getFullYear(), date.getMonth(), 1);
+        }
+
+        function startOfYear(date) {
+            return new Date(date.getFullYear(), 0, 1);
+        }
+
+        function diffDays(startDate, endDate) {
+            const millisecondsPerDay = 86400000;
+            return Math.round((endDate - startDate) / millisecondsPerDay);
+        }
+
+        function rangeForScale() {
+            let minDate = new Date(2026, 0, 1);
+            let maxDate = new Date(2027, 1, 28);
+
+            state.tasks.forEach((task) => {
+                const allDates = [...(task.planned || []), ...(task.real || [])];
+
+                allDates.forEach((dateString) => {
+                    const parsedDate = parseDate(dateString);
+                    if (!parsedDate) return;
+
+                    if (parsedDate < minDate) minDate = new Date(parsedDate);
+                    if (parsedDate > maxDate) maxDate = new Date(parsedDate);
+                });
+            });
+
+            if (currentScale === "week") {
+                minDate = startOfWeek(addDays(minDate, -14));
+                maxDate = startOfWeek(addDays(maxDate, 14));
+                maxDate = addDays(maxDate, 6);
+            } else if (currentScale === "month") {
+                minDate = startOfMonth(addDays(minDate, -20));
+                maxDate = new Date(maxDate.getFullYear(), maxDate.getMonth() + 2, 0);
+            } else {
+                minDate = startOfYear(addDays(minDate, -60));
+                maxDate = new Date(maxDate.getFullYear() + 1, 11, 31);
+            }
+
+            return { min: minDate, max: maxDate };
+        }
+
+        function unitConfig() {
+            if (currentScale === "week") {
+                return { unitDays: 7, width: 90 };
+            }
+            if (currentScale === "year") {
+                return { unitDays: 365, width: 220 };
+            }
+            return { unitDays: 30, width: 110 };
+        }
+
+        function periods() {
+            const { min: minDate, max: maxDate } = rangeForScale();
+            const config = unitConfig();
+            const periodsList = [];
+
+            if (currentScale === "week") {
+                let currentDate = startOfWeek(minDate);
+                while (currentDate <= maxDate) {
+                    periodsList.push({
+                        start: new Date(currentDate),
+                        end: addDays(currentDate, 6),
+                        label: `Sem. ${getISOWeek(currentDate)} / ${String(currentDate.getFullYear()).slice(-2)}`,
+                    });
+                    currentDate = addDays(currentDate, 7);
+                }
+            } else if (currentScale === "month") {
+                let currentDate = startOfMonth(minDate);
+                while (currentDate <= maxDate) {
+                    periodsList.push({
+                        start: new Date(currentDate),
+                        end: new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0),
+                        label: currentDate.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""),
+                    });
+                    currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+                }
+            } else {
+                let currentDate = startOfYear(minDate);
+                while (currentDate <= maxDate) {
+                    periodsList.push({
+                        start: new Date(currentDate),
+                        end: new Date(currentDate.getFullYear(), 11, 31),
+                        label: `${currentDate.getFullYear()}`,
+                    });
+                    currentDate = new Date(currentDate.getFullYear() + 1, 0, 1);
+                }
+            }
+
+            return {
+                arr: periodsList,
+                min: minDate,
+                max: maxDate,
+                cfg: config
+            };
+        }
+
+        function getISOWeek(date) {
+            const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            const dayOfWeek = utcDate.getUTCDay() || 7;
+
+            utcDate.setUTCDate(utcDate.getUTCDate() + 4 - dayOfWeek);
+
+            const yearStartDate = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
+            const millisecondsPerDay = 86400000;
+            const daysDifference = (utcDate - yearStartDate) / millisecondsPerDay;
+
+            return Math.ceil((daysDifference + 1) / 7);
+        }
+
+        function timelineWidth() {
+            const periodsData = periods();
+            return periodsData.arr.length * periodsData.cfg.width;
+        }
+
+        function positionForDate(dateString) {
+            const periodsData = periods();
+            const parsedDate = parseDate(dateString);
+            if (!parsedDate) return 0;
+
+            const elapsedDays = diffDays(periodsData.min, parsedDate);
+            return (elapsedDays / periodsData.cfg.unitDays) * periodsData.cfg.width;
+        }
+
+        function widthForRange(startDateString, endDateString) {
+            if (!startDateString || !endDateString) return 0;
+
+            const startDate = parseDate(startDateString);
+            const endDate = parseDate(endDateString);
+
+            if (!startDate || !endDate) return 0;
+
+            const configuration = unitConfig();
+            const totalDays = diffDays(startDate, endDate) + 1;
+            const calculatedWidth = (totalDays / configuration.unitDays) * configuration.width;
+
+            return Math.max(6, calculatedWidth);
+        }
+
+        function ownerOptions(selected) {
+            let html = '<option value="">—</option>';
+
+            responsaveis.forEach((responsavel) => {
+                html += `
+                    <option value="${escapeHtml(responsavel)}"${responsavel === selected ? ' selected' : ''}>
+                        ${escapeHtml(responsavel)}
+                    </option>
+                `;
+            });
+            return html;
+        }
+
+        function predecessorOptions(selectedTaskNo) {
+            let htmlOptions = '<option value="">Nenhuma</option>';
+
+            state.tasks
+                .filter((task) => !task.group)
+                .forEach((task) => {
+                    const isSelected = task.no === selectedTaskNo ? " selected" : "";
+                    const taskLabel = `${task.no} — ${task.name}`;
+
+                    htmlOptions += `
+                        <option value="${escapeHtml(task.no)}"${isSelected}>
+                            ${escapeHtml(taskLabel)}
+                        </option>
+                    `;
+                });
+
+            return htmlOptions;
+        }
+
+        function renderLeft() {
+            const isColumnVisible = {
+                owner: $(".column-toggle[value='owner']").is(":checked"),
+                planned: $(".column-toggle[value='planned']").is(":checked"),
+                real: $(".column-toggle[value='real']").is(":checked"),
+                predecessors: $(".column-toggle[value='predecessors']").is(":checked"),
+                progress: $(".column-toggle[value='progress']").is(":checked"),
+            };
+
+            const $leftTableBody = $("#leftBody").empty();
+
+            state.tasks.forEach((task) => {
+                const rowClass = task.group ? "group-row" : "child";
+                const progressValue = task.progress == null ? 0 : task.progress;
+
+                $leftTableBody.append(`
+                    <tr class="${rowClass}" data-id="${task.id}">
+                        <td class="text-center text-secondary">${escapeHtml(task.no)}</td>
+                        <td class="activity-cell">
+                            <div class="d-flex align-items-center gap-1">
+                                <input class="activity-input" data-field="name" value="${escapeHtml(task.name)}" ${task.group ? 'style="font-weight:600"' : ""}>
+                                ${task.critical ? '<i class="bi bi-exclamation-triangle-fill status-critical" title="Crítico"></i>' : ""}
+                                ${task.overdue ? '<i class="bi bi-fire status-overdue" title="Atrasado"></i>' : ""}
+                            </div>
+                        </td>
+                        <td class="col-owner">
+                            ${task.group ? "<span>—</span>" : `<select class="owner-select" data-field="owner">${ownerOptions(task.owner)}</select>`}
+                        </td>
+                        <td class="col-planned">
+                            ${task.group ? "<span>—</span>" : dateRangeHtml(task, "planned")}
+                        </td>
+                        <td class="col-real">
+                            ${task.group ? "<span>—</span>" : dateRangeHtml(task, "real")}
+                        </td>
+                        <td class="col-predecessors">
+                            ${task.group ? "<span>—</span>" : `<select class="pred-select" data-field="pred">${predecessorOptions(task.pred)}</select>`}
+                        </td>
+                        <td class="col-progress">
+                            <input type="number" min="0" max="100" class="progress-input" data-field="progress" value="${progressValue}" ${task.group ? "disabled" : ""}>
+                        </td>
+                        <td class="text-center">
+                            <button type="button" class="delete-btn" data-delete="${task.id}" title="Excluir">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `);
+            });
+
+            $(".col-owner").toggle(isColumnVisible.owner);
+            $(".col-planned").toggle(isColumnVisible.planned);
+            $(".col-real").toggle(isColumnVisible.real);
+            $(".col-predecessors").toggle(isColumnVisible.predecessors);
+            $(".col-progress").toggle(isColumnVisible.progress);
+
+            syncLeftWidth();
+        }
+
+        function dateRangeHtml(task, fieldName) {
+            const dateValues = task[fieldName] || ["", ""];
+            const [startDate = "", endDate = ""] = dateValues;
+
+            return `
+                <div class="date-range">
+                    <input type="date" data-field="${fieldName}" data-index="0" value="${startDate}">
+                    <span class="text-secondary">–</span>
+                    <input type="date" data-field="${fieldName}" data-index="1" value="${endDate}">
+                </div>
+            `;
+        }
+
+        function renderTimeline() {
+            const periodsData = periods();
+            const totalWidth = timelineWidth();
+
+            $("#timelineContainer").css({
+                "--timeline-width": `${totalWidth}px`,
+                "--unit-width": `${periodsData.cfg.width}px`,
+            });
+
+            let headerHtml = "";
+            periodsData.arr.forEach((period, index) => {
+                const leftPosition = index * periodsData.cfg.width;
+                headerHtml += `
+                    <div class="period-label" style="left:${leftPosition}px;width:${periodsData.cfg.width}px">
+                        ${escapeHtml(period.label)}
+                    </div>
+                `;
+            });
+
+            $("#timelineHeader").html(headerHtml);
+
+            $("#timelineBody [data-bs-toggle='tooltip']").each(function () {
+                const tooltipInstance = bootstrap.Tooltip.getInstance(this);
+                if (tooltipInstance) tooltipInstance.dispose();
+            });
+
+            const $timelineBody = $("#timelineBody").empty();
+
+            state.tasks.forEach((task) => {
+                const rowElement = $('<div class="timeline-row"></div>');
+                if (task.group) rowElement.addClass("group");
+
+                const gridElement = $('<div class="timeline-grid"></div>');
+                periodsData.arr.forEach(() => gridElement.append("<span></span>"));
+                rowElement.append(gridElement);
+
+                if (task.planned && task.planned[0] && task.planned[1]) {
+                    const taskLeft = positionForDate(task.planned[0]);
+                    const taskWidth = widthForRange(task.planned[0], task.planned[1]);
+
+                    if (compareBaseline && task.baseline) {
+                        const baselineLeft = positionForDate(task.baseline[0]);
+                        const baselineWidth = widthForRange(task.baseline[0], task.baseline[1]);
+                        rowElement.append(
+                            $(`<span class="bar baseline-bar" data-bs-toggle="tooltip" data-bs-title="Linha de base"></span>`).css({
+                                left: baselineLeft,
+                                width: baselineWidth,
+                            })
+                        );
+                    }
+
+                    const taskProgress = task.progress == null ? 100 : task.progress;
+                    const barTitle = `${task.name} — ${taskProgress}%`;
+
+                    const taskBar = $(`
+                        <button type="button" class="bar
+                            ${task.group ? "group-bar" : "task-bar"}
+                            ${task.critical ? " critical" : ""}
+                            ${task.overdue ? " overdue" : ""}"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="${escapeHtml(barTitle)}">
+                        </button>
+                    `);
+
+                    taskBar.css({ left: taskLeft, width: taskWidth });
+
+                    if (!task.group) {
+                        const progressPercentage = Math.max(0, Math.min(100, task.progress || 0));
+                        const fillElement = $('<span class="progress-fill"></span>').css({
+                            width: `${progressPercentage}%`,
+                        });
+                        taskBar.append(fillElement);
+                    }
+
+                    rowElement.append(taskBar);
+                }
+
+                $timelineBody.append(rowElement);
+            });
+
+            $("#timelineBody [data-bs-toggle='tooltip']").each(function () {
+                new bootstrap.Tooltip(this);
+            });
+        }
+
+        function syncLeftWidth() {
+            // Permite que a tabela esquerda tenha scroll horizontal se as colunas
+            // selecionadas excederem a largura do bloco congelado.
+            const selectedColumnsCount = $(".column-toggle:checked").length;
+
+            const calculatedWidth =
+                48 +
+                230 +
+                (selectedColumnsCount >= 1 ? 125 : 0) +
+                (selectedColumnsCount >= 2 ? 205 : 0) +
+                (selectedColumnsCount >= 3 ? 205 : 0) +
+                (selectedColumnsCount >= 4 ? 120 : 0) +
+                (selectedColumnsCount >= 5 ? 58 : 0) +
+                46;
+
+            const minimumTableWidth = Math.max(760, calculatedWidth);
+
+            $(".left-table").css({
+                "min-width": `${minimumTableWidth}px`,
+                "width": `${minimumTableWidth}px`
+            });
+        }
+
+        function renderAll() {
+            renderLeft();
+            renderTimeline();
+        }
+
+        // Atualiza dados sem precisar reconstruir a linha inteira.
+        $("#leftBody").on("input change", "[data-field]", function () {
+            const $element = $(this);
+            const taskId = Number($element.closest("tr").data("id"));
+            const currentTask = state.tasks.find((task) => task.id === taskId);
+            if (!currentTask) return;
+
+            const fieldName = $element.data("field");
+
+            if (fieldName === "name" || fieldName === "owner" || fieldName === "pred") {
+                currentTask[fieldName] = $element.val();
+            }
+
+            if (fieldName === "progress") {
+                currentTask.progress = Math.max(0, Math.min(100, Number($element.val()) || 0));
+                renderTimeline();
+            }
+
+            if (fieldName === "planned" || fieldName === "real") {
+                const dateIndex = Number($element.data("index"));
+                currentTask[fieldName][dateIndex] = $element.val();
+                renderTimeline();
+            }
+        });
+
+        let deleteTaskId = null;
+        const deleteModal = bootstrap.Modal.getOrCreateInstance(document.getElementById("deleteActivityModal"));
+
+        $("#leftBody").on("click", "[data-delete]", function () {
+            deleteTaskId = Number($(this).data("delete"));
+
+            const taskToDelete = state.tasks.find((task) => task.id === deleteTaskId);
+            if (!taskToDelete) return;
+
+            $("#deleteActivityName").text(`${taskToDelete.no} —${taskToDelete.name}`);
+            deleteModal.show();
+        });
+
+        $("#btnConfirmDelete").on("click", function () {
+            if (deleteTaskId === null) return;
+
+            state.tasks = state.tasks.filter((task) => task.id !== deleteTaskId);
+
+            // Mantém a sequência da coluna # depois da exclusão.
+            renumberTasks();
+
+            deleteTaskId = null;
+            deleteModal.hide();
+            renderAll();
+        });
+
+        $(".column-toggle").on("change", renderLeft);
+
+        $("[data-scale]").on("click", function () {
+            currentScale = $(this).data("scale");
+            $("[data-scale]").removeClass("active");
+            $(this).addClass("active");
+            renderTimeline();
+        });
+
+        $("#btnAdd").on("click", function () {
+            const last = state.tasks[state.tasks.length - 1];
+            const newTask = {
+                id: nextId++,
+                no: nextActivityNumber(),
+                name: "Nova atividade",
+                owner: "",
+                planned: ["2026-09-01", "2026-09-08"],
+                real: ["", ""],
+                pred: last && !last.group ? last.no : "",
+                progress: 0,
+            };
+
+            state.tasks.push(newTask);
+            renumberTasks();
+            renderAll();
+
+            setTimeout(() => {
+                const $row =$(` #leftBody tr[data-id="${newTask.id}"]`);
+                $("#leftScroll").scrollTop($("#leftScroll")[0].scrollHeight);
+                $row.find(".activity-input").trigger("focus").select();
+            }, 20);
+        });
+
+        function renumberTasks() {
+            let groupIndex = 0;
+            let childIndex = 0;
+
+            state.tasks.forEach((task) => {
+                if (task.group) {
+                    groupIndex++;
+                    childIndex = 0;
+                    task.no = String(groupIndex);
+                } else {
+                    // Se não houver grupo anterior, cria uma numeração de atividade simples.
+                    if (groupIndex === 0) {
+                        const currentTaskIndex = state.tasks.indexOf(task) + 1;
+                        task.no = String(currentTaskIndex);
+                        return;
+                    }
+
+                    childIndex++;
+                    task.no = `${groupIndex}.${childIndex}`;
+                }
+            });
+        }
+
+        function nextActivityNumber() {
+            // Nova atividade entra no último grupo existente.
+            let lastGroupIndex = 0;
+            let childIndex = 0;
+
+            for (let i = 0; i < state.tasks.length; i++) {
+                const currentTask = state.tasks[i];
+
+                if (currentTask.group) {
+                    lastGroupIndex = Number(currentTask.no) || lastGroupIndex + 1;
+                    childIndex = 0;
+                } else if (lastGroupIndex > 0) {
+                    childIndex++;
+                }
+            }
+
+            const nextChildIndex = childIndex + 1;
+            const fallbackTaskNumber = String(state.tasks.length + 1);
+
+            return lastGroupIndex > 0 ? `${lastGroupIndex}.${nextChildIndex}` : fallbackTaskNumber;
+        }
+
+        $("#btnSaveBaseline").on("click", function () {
+            state.tasks.forEach((task) => {
+                if (task.planned) {
+                    task.baseline = [...task.planned];
+                }
+            });
+
+            baselineSaved = true;
+            compareBaseline = true;
+
+            $("#btnCompare").addClass("baseline-active");
+            renderTimeline();
+
+            const $saveButton = $(this);
+            $saveButton.html('<i class="bi bi-check-circle me-1"></i>Linha de base salva');
+
+            setTimeout(() => {
+                $saveButton.html('<i class="bi bi-shield-check me-1"></i>Salvar linha de base');
+            }, 1800);
+        });
+
+        $("#btnCompare").on("click", function () {
+            if (!baselineSaved) {
+                alert("Salve a linha de base primeiro.");
+                return;
+            }
+            compareBaseline = !compareBaseline;
+            $(this).toggleClass("baseline-active", compareBaseline);
+            renderTimeline();
+        });
+
+        $("#btnPrev").on("click", function () {
+            const $timelineContainer = $("#rightScroll");
+            const currentScrollPosition = $timelineContainer.scrollLeft();
+            const scrollAmount = 500;
+            const animationDuration = 250;
+
+            $timelineContainer.animate(
+                { scrollLeft: Math.max(0, currentScrollPosition - scrollAmount) },
+                animationDuration
+            );
+        });
+
+        $("#btnNext").on("click", function () {
+            const $timelineContainer = $("#rightScroll");
+            const currentScrollPosition = $timelineContainer.scrollLeft();
+            const scrollAmount = 500;
+            const animationDuration = 250;
+
+            $timelineContainer.animate(
+                { scrollLeft: currentScrollPosition + scrollAmount },
+                animationDuration
+            );
+        });
+
+        // Sincroniza o scroll vertical entre o bloco congelado e o timeline.
+        let syncing = false;
+
+        $("#leftScroll").on("scroll", function () {
+            if (syncing) return;
+            syncing = true;
+            $("#rightScroll").scrollTop(this.scrollTop);
+            syncing = false;
+        });
+
+        $("#rightScroll").on("scroll", function () {
+            if (syncing) return;
+            syncing = true;
+            $("#leftScroll").scrollTop(this.scrollTop);
+            syncing = false;
+        });
+
+        // Altura igual dos dois blocos.
+        function syncHeights() {
+            const left = $("#leftScroll")[0];
+            const right = $("#rightScroll")[0];
+            if (!left || !right) return;
+            right.scrollTop = left.scrollTop;
+        }
+
+        renumberTasks();
+        renderAll();
+        syncHeights();
+    });
+</script>
