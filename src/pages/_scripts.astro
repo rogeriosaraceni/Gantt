@@ -350,6 +350,11 @@
                 progress: $(".column-toggle[value='progress']").is(":checked"),
             };
 
+            $("#leftBody [data-bs-toggle='tooltip']").each(function () {
+                const instanciaTooltip = bootstrap.Tooltip.getInstance(this);
+                if (instanciaTooltip) instanciaTooltip.dispose();
+            });
+
             const $corpoTabelaEsquerda = $("#leftBody").empty();
 
             estado.tasks.forEach((tarefa) => {
@@ -382,7 +387,7 @@
                             <input type="number" min="0" max="100" class="progress-input" data-field="progress" value="${valorProgresso}" ${tarefa.group ? "disabled" : ""}>
                         </td>
                         <td class="text-center">
-                            <button type="button" class="delete-btn" data-delete="${tarefa.id}" title="Excluir">
+                            <button type="button" class="delete-btn" data-delete="${tarefa.id}" data-bs-toggle="tooltip" data-bs-title="Excluir">
                                 <i class="bi bi-trash3"></i>
                             </button>
                         </td>
@@ -395,6 +400,10 @@
             $(".col-real").toggle(colunaVisivel.real);
             $(".col-predecessors").toggle(colunaVisivel.predecessors);
             $(".col-progress").toggle(colunaVisivel.progress);
+
+            $("#leftBody [data-bs-toggle='tooltip']").each(function () {
+                new bootstrap.Tooltip(this);
+            });
 
             sincronizarLarguraEsquerda();
         }
@@ -554,12 +563,15 @@
         const modalExclusao = bootstrap.Modal.getOrCreateInstance(document.getElementById("deleteActivityModal"));
 
         $("#leftBody").on("click", "[data-delete]", function () {
+            const instanciaTooltip = bootstrap.Tooltip.getInstance(this);
+            if (instanciaTooltip) instanciaTooltip.hide();
+
             idTarefaExcluir = Number($(this).data("delete"));
 
             const tarefaParaExcluir = estado.tasks.find((tarefa) => tarefa.id === idTarefaExcluir);
             if (!tarefaParaExcluir) return;
 
-            $("#deleteActivityName").text(`${tarefaParaExcluir.no} —${tarefaParaExcluir.name}`);
+            $("#deleteActivityName").text(`${tarefaParaExcluir.no} — ${tarefaParaExcluir.name}`);
             modalExclusao.show();
         });
 
