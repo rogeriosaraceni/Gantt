@@ -96,7 +96,7 @@ import Scripts from "./_scripts.astro";
         <div class="gantt-layout">
             <!-- ESQUERDA: BLOCO CONGELADO -->
             <div class="gantt-left">
-                <div class="gantt-header-left" id="leftHeaderScroll">
+                <div class="gantt-left-scroll" id="leftScroll">
                     <table class="gantt-table left-table">
                         <colgroup>
                             <col class="col-num" />
@@ -111,31 +111,16 @@ import Scripts from "./_scripts.astro";
 
                         <thead>
                             <tr>
-                                <th>#</th>
-                                <th>Atividade</th>
-                                <th>Responsável</th>
-                                <th>Planejado</th>
-                                <th>Real</th>
-                                <th>Predecessoras</th>
-                                <th>%</th>
-                                <th>Del</th>
+                                <th class="col-num">#</th>
+                                <th class="col-activity">Atividade</th>
+                                <th class="col-owner">Responsável</th>
+                                <th class="col-planned">Planejado</th>
+                                <th class="col-real">Real</th>
+                                <th class="col-predecessors">Predecessoras</th>
+                                <th class="col-progress">%</th>
+                                <th class="col-actions">Del</th>
                             </tr>
                         </thead>
-                    </table>
-                </div>
-
-                <div class="gantt-left-scroll" id="leftScroll">
-                    <table class="gantt-table left-table">
-                        <colgroup>
-                            <col class="col-num" />
-                            <col class="col-activity" />
-                            <col class="col-owner" />
-                            <col class="col-planned" />
-                            <col class="col-real" />
-                            <col class="col-predecessors" />
-                            <col class="col-progress" />
-                            <col class="col-actions" />
-                        </colgroup>
 
                         <tbody id="leftBody"></tbody>
                     </table>
@@ -144,12 +129,11 @@ import Scripts from "./_scripts.astro";
 
             <!-- DIREITA: TIMELINE -->
             <div class="gantt-right">
-                <div class="gantt-header-right" id="rightHeaderScroll">
-                    <div class="timeline" id="timelineHeader"></div>
-                </div>
-
                 <div class="gantt-right-scroll" id="rightScroll">
-                    <div class="timeline" id="timelineBody"></div>
+                    <div class="timeline" id="timelineContainer">
+                        <div class="timeline-header" id="timelineHeader"></div>
+                        <div id="timelineBody"></div>
+                    </div>
                 </div>
             </div>
         </div>

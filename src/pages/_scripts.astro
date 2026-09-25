@@ -350,13 +350,7 @@
                 progress: $(".column-toggle[value='progress']").is(":checked"),
             };
 
-            $(".col-owner").toggle(isColumnVisible.owner);
-            $(".col-planned").toggle(isColumnVisible.planned);
-            $(".col-real").toggle(isColumnVisible.real);
-            $(".col-predecessors").toggle(isColumnVisible.predecessors);
-            $(".col-progress").toggle(isColumnVisible.progress);
-
-            const $leftTableBody =$("#leftBody").empty();
+            const $leftTableBody = $("#leftBody").empty();
 
             state.tasks.forEach((task) => {
                 const rowClass = task.group ? "group-row" : "child";
@@ -396,10 +390,13 @@
                 `);
             });
 
-            syncLeftWidth();
+            $(".col-owner").toggle(isColumnVisible.owner);
+            $(".col-planned").toggle(isColumnVisible.planned);
+            $(".col-real").toggle(isColumnVisible.real);
+            $(".col-predecessors").toggle(isColumnVisible.predecessors);
+            $(".col-progress").toggle(isColumnVisible.progress);
 
-            // Depois de mostrar/ocultar colunas, o header continua na mesma posição horizontal das TDs.
-            $("#leftHeaderScroll").scrollLeft($("#leftScroll").scrollLeft());
+            syncLeftWidth();
         }
 
         function dateRangeHtml(task, fieldName) {
@@ -419,12 +416,12 @@
             const periodsData = periods();
             const totalWidth = timelineWidth();
 
-            $("#timelineHeader, #timelineBody").css({
+            $("#timelineContainer").css({
                 "--timeline-width": `${totalWidth}px`,
                 "--unit-width": `${periodsData.cfg.width}px`,
             });
 
-            let headerHtml = '<div class="timeline-header">';
+            let headerHtml = "";
             periodsData.arr.forEach((period, index) => {
                 const leftPosition = index * periodsData.cfg.width;
                 headerHtml += `
@@ -433,7 +430,6 @@
                     </div>
                 `;
             });
-            headerHtml += "</div>";
 
             $("#timelineHeader").html(headerHtml);
 
@@ -507,9 +503,10 @@
 
             const minimumTableWidth = Math.max(760, calculatedWidth);
 
-            $(".left-table").css("min-width", `${minimumTableWidth}px`);
-            $("#leftHeaderScroll .left-table").css("width", `${minimumTableWidth}px`);
-            $("#leftScroll .left-table").css("width", `${minimumTableWidth}px`);
+            $(".left-table").css({
+                "min-width": `${minimumTableWidth}px`,
+                "width": `${minimumTableWidth}px`
+            });
         }
 
         function renderAll() {
@@ -701,11 +698,6 @@
             );
         });
 
-        // Sincroniza somente o eixo horizontal do cabeçalho com o corpo da timeline.
-        $("#rightScroll").on("scroll", function () {
-            $("#rightHeaderScroll").scrollLeft(this.scrollLeft);
-        });
-
         // Sincroniza o scroll vertical entre o bloco congelado e o timeline.
         let syncing = false;
 
@@ -721,15 +713,6 @@
             syncing = true;
             $("#leftScroll").scrollTop(this.scrollTop);
             syncing = false;
-            $("#rightHeaderScroll").scrollLeft(this.scrollLeft);
-        });
-
-        // IMPORTANTE:
-        // O bloco esquerdo tem um header separado das TDs. Portanto,
-        // quando o usuário move o scrollbar horizontal das colunas,
-        // movemos o header exatamente para o mesmo scrollLeft.
-        $("#leftScroll").on("scroll", function () {
-            $("#leftHeaderScroll").scrollLeft(this.scrollLeft);
         });
 
         // Altura igual dos dois blocos.

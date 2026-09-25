@@ -52,6 +52,7 @@
     width: 100%;
     min-width: 0;
     height: auto;
+    max-height: calc(100vh - 120px);
 }
 
 /* BLOCO CONGELADO */
@@ -76,32 +77,6 @@
     background: #fff;
 }
 
-.gantt-header-left,
-.gantt-header-right {
-    height: var(--header-h);
-    flex: 0 0 var(--header-h);
-    background: var(--g-header);
-    border-bottom: 1px solid var(--g-border);
-    overflow: hidden;
-}
-
-/* O cabeçalho esquerdo usa exatamente a mesma largura interna
-    da tabela das TDs. O scrollLeft é sincronizado via jQuery. */
-.gantt-header-left {
-    overflow-x: hidden;
-    overflow-y: hidden;
-    scrollbar-width: none;
-}
-
-.gantt-header-left::-webkit-scrollbar {
-    display: none;
-}
-
-.gantt-header-left .left-table {
-    width: max-content;
-    min-width: 760px;
-}
-
 .gantt-left-scroll .left-table {
     width: max-content;
     min-width: 760px;
@@ -111,16 +86,6 @@
 .gantt-right-scroll {
     flex: 1 1 auto;
     min-height: 0;
-    overflow: auto;
-    scrollbar-gutter: stable;
-}
-
-.gantt-left-scroll {
-    overflow-x: auto;
-    overflow-y: scroll;
-}
-
-.gantt-right-scroll {
     overflow-x: auto;
     overflow-y: scroll;
 }
@@ -131,11 +96,6 @@
     table-layout: fixed;
     width: max-content;
     min-width: 100%;
-}
-
-.gantt-header-left .gantt-table,
-.gantt-left-scroll .gantt-table {
-    table-layout: fixed;
 }
 
 .gantt-table th,
@@ -154,6 +114,9 @@
 }
 
 .gantt-table th {
+    position: sticky;
+    top: 0;
+    z-index: 10;
     height: var(--header-h);
     background: var(--g-header);
     color: var(--g-muted);
@@ -161,6 +124,7 @@
     font-weight: 500;
     text-transform: uppercase;
     letter-spacing: .04em;
+    box-shadow: inset 0 -1px 0 var(--g-border);
 }
 
 
@@ -273,7 +237,9 @@
 }
 
 .timeline-header {
-    position: relative;
+    position: sticky;
+    top: 0;
+    z-index: 10;
     height: var(--header-h);
     background: var(--g-header);
     border-bottom: 1px solid var(--g-border);
