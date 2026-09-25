@@ -51,7 +51,7 @@
     display: flex;
     width: 100%;
     min-width: 0;
-    height: 560px;
+    height: auto;
 }
 
 /* BLOCO CONGELADO */
