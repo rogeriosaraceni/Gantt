@@ -7,6 +7,7 @@
         let compararLinhaBase = false;
         let proximoId = 100;
         let idParaExcluir = null;
+        let dataInicioVisivel = new Date(); // Data atual ou início do projeto
 
         function recalcularNumeracao() {
             let contadorGrupo = 0;
@@ -304,6 +305,11 @@
                 </div>
             `;
         }
+
+
+
+
+
 
         function renderizarEsquerda() {
             const $body =$("#leftBody").empty();
@@ -607,6 +613,34 @@
 
         $(".column-toggle").on("change", function () {
             atualizarVisibilidadeColunas();
+        });
+
+
+        // Rola 300px para a esquerda
+        $("#btnPrev").on("click", function () {
+            const $container = $("#rightScroll");
+            $container.animate({
+                scrollLeft: $container.scrollLeft() - 300
+            }, 200);
+        });
+        // Rola 300px para a direita
+        $("#btnNext").on("click", function () {
+            const $container = $("#rightScroll");
+            $container.animate({
+                scrollLeft: $container.scrollLeft() + 300
+            }, 200);
+        });
+
+        $("#rightScroll").on("scroll", function () {
+            const $container = $(this);
+            const scrollLeft = $container.scrollLeft();
+            const maxScroll = $container[0].scrollWidth - $container.outerWidth();
+
+            // Desativa 'prev' se estiver no início
+            $("#btnPrev").prop("disabled", scrollLeft <= 0);
+
+            // Desativa 'next' se atingir o fim
+            $("#btnNext").prop("disabled", scrollLeft >= maxScroll - 1);
         });
 
         $(document).on("click", '[data-btn="addAtividade"]', function () {
