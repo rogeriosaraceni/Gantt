@@ -62,6 +62,30 @@ legend
     margin-right: 4px;
     vertical-align: -1px;
 }
+.legend-line {
+    display: inline-block;
+    width: 1px;
+    height: 12px;
+    vertical-align: middle;
+    margin-right: 4px;
+}
+
+.legend-baseline{
+    background-color: var(--g-baseline);
+}
+.legend-real{
+    background-color: var(--g-real);
+}
+.legend-critico{
+    background-color: var(--g-critico);
+}
+.legend-atrasado{
+    background-color: var(--g-atrasado);
+}
+.legend-hoje{
+    background-color: var(--bs-primary);
+}
+
 
 /*-----------------------------------------------------
 gantt-shell / gantt-layout

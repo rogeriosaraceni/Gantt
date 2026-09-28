@@ -5,7 +5,25 @@
     $(function () {
         let escalaAtual = "month";
         let compararLinhaBase = false;
-        let proximoId = 20;
+        let proximoId = 100;
+        let idParaExcluir = null;
+
+        function recalcularNumeracao() {
+            let contadorGrupo = 0;
+            let contadorFilha = 0;
+
+            estado.tasks.forEach((tarefa) => {
+                if (tarefa.group) {
+                    contadorGrupo++;
+                    contadorFilha = 0;
+                    tarefa.no = `${contadorGrupo}.0`;
+                } else {
+                    if (contadorGrupo === 0) contadorGrupo = 1;
+                    contadorFilha++;
+                    tarefa.no = `${contadorGrupo}.${contadorFilha}`;
+                }
+            });
+        }
 
         function escaparHtml(valor) {
             return String(valor ?? "")
@@ -275,7 +293,7 @@
                     $row.append(`<div class="today-line" style="left:${posHoje}px;"></div>`);
                 }
 
-                // Linha Base (Fina, Cinza)
+                // Linha Base
                 const baselineDates = compararLinhaBase ? (tarefa.baseline || tarefa.planned) : tarefa.planned;
                 if (baselineDates && baselineDates[0] && baselineDates[1]) {
                     const leftBase = posicaoParaData(baselineDates[0]);
@@ -335,6 +353,7 @@
         }
 
         function renderizar() {
+            recalcularNumeracao();
             renderizarEsquerda();
             renderizarDireita();
             inicializarTooltips();
@@ -397,15 +416,37 @@
 
         $(document).on("click", ".btn-del", function () {
             const id = Number($(this).data("id"));
-            estado.tasks = estado.tasks.filter((t) => t.id !== id);
-            renderizar();
+            const task = estado.tasks.find((t) => t.id === id);
+            if (!task) return;
+
+            idParaExcluir = id;
+            $("#deleteActivityName").text(task.name);
+
+            const deleteModalElem = document.getElementById("deleteActivityModal");
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(deleteModalElem);
+            modalInstance.show();
+        });
+
+        $("#btnConfirmDelete").on("click", function () {
+            if (idParaExcluir !== null) {
+                estado.tasks = estado.tasks.filter((t) => t.id !== idParaExcluir);
+                idParaExcluir = null;
+
+                const deleteModalElem = document.getElementById("deleteActivityModal");
+                const modalInstance = bootstrap.Modal.getInstance(deleteModalElem);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+
+                renderizar();
+            }
         });
 
         $("#btnAdd").on("click", function () {
             proximoId++;
             const novaTarefa = {
                 id: proximoId,
-                no: `2.${estado.tasks.length}`,
+                no: "",
                 name: "Nova Atividade",
                 owner: "",
                 planned: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
