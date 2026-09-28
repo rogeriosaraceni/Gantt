@@ -396,12 +396,52 @@
             renderizar();
         });
 
+        // Garante que o array de histórico exista no seu estado
+        if (!estado.baselines) {
+            estado.baselines = [];
+        }
+
         $("#btnSaveBaseline").on("click", function () {
+            // 1. Atualiza os dados de baseline de cada tarefa
             estado.tasks.forEach((t) => {
                 t.baseline = [...(t.planned || ["", ""])];
             });
-            alert("Linha de base salva com sucesso!");
+
+            // 2. Calcula a nova versão e data formatada (DD/MM/AAAA)
+            const numeroVersao = estado.baselines.length + 1;
+            const dataHoje = new Date().toLocaleDateString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric"
+            });
+
+            const registro = {
+                versao: numeroVersao,
+                data: dataHoje,
+                texto: `Linha de base ${numeroVersao} salva em ${dataHoje}`
+            };
+
+            // 3. Adiciona ao histórico do estado
+            estado.baselines.push(registro);
+
+            // 4. Monta a lista HTML das versões no modal
+            const $lista =$("#listaBaselines");
+            $lista.empty();
+
+            estado.baselines.forEach((b) => {
+                $lista.append(`
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-bookmark-check-fill text-success me-2"></i>${b.texto}</span>
+                    </li>
+                `);
+            });
+
+            // 5. Renderiza a tela/gráfico
             renderizar();
+
+            // 6. Exibe o modal Bootstrap
+            const modal = new bootstrap.Modal(document.getElementById("modalBaseline"));
+            modal.show();
         });
 
         $("#btnCompare").on("click", function () {
