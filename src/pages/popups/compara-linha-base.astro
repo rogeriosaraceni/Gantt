@@ -1,0 +1,102 @@
+---
+import Layout from "../../layouts/Layout.astro";
+---
+
+<style>
+    body {
+        background-color: #f8f9fa;
+    }
+    .text-desvio-atrasado { color: #dc3545; font-weight: 600; }
+    .text-desvio-adiantado { color: #0d6efd; font-weight: 600; }
+    .text-desvio-noprazo { color: #198754; font-weight: 600; }
+
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        body {
+            background-color: #ffffff !important;
+        }
+        .card-print {
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+        }
+    }
+</style>
+
+<Layout>
+    <!-- Bar de Ações (Oculta na impressão) -->
+    <div class="bg-dark text-white p-3 d-flex justify-content-between align-items-center no-print">
+        <span class="fw-semibold">Comparação com a Linha de Base</span>
+        <button type="button" class="btn btn-danger btn-sm px-3" onclick="window.print()">
+            <i class="bi bi-printer me-1"></i> Imprimir / Salvar PDF
+        </button>
+    </div>
+
+    <!-- Conteúdo do Relatório -->
+    <div class="container my-4">
+        <div class="bg-white p-4 rounded-3 shadow-sm card-print mx-auto" style="max-width: 900px;">
+            <h4 class="fw-bold mb-1" id="compareProjectTitle">Migração Infraestrutura Cloud</h4>
+            <p class="text-muted small mb-3" id="compareBaselineSub">Carregando dados...</p>
+
+            <div id="compareImpactBanner" class="alert alert-success border-0 py-2 px-3 mb-3 fw-semibold">
+                Impacto no prazo final do projeto: sem alteração
+            </div>
+
+            <div class="d-flex gap-4 mb-3 small fw-semibold">
+                <span class="text-danger"><i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i><span id="cntAtrasadas">0</span> atrasada(s)</span>
+                <span class="text-primary"><i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i><span id="cntAdiantadas">0</span> adiantada(s)</span>
+                <span class="text-success"><i class="bi bi-circle-fill me-1" style="font-size: 8px;"></i><span id="cntNoPrazo">0</span> no prazo</span>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 small">
+                    <thead class="table-light border-bottom">
+                        <tr>
+                            <th>Atividade</th>
+                            <th class="text-center" id="thBaselineLabel">Linha de base</th>
+                            <th class="text-center">Atual</th>
+                            <th class="text-end">Desvio</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbodyCompareTasks">
+                        <!-- Preenchido via Script -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</Layout>
+
+<script is:inline>
+    // Pega os dados passados pela janela principal
+    $(document).ready(function() {
+        if (window.parent && window.parent.dadosComparacaoGantt) {
+            const dados = window.parent.dadosComparacaoGantt;
+
+            $("#compareBaselineSub").text(dados.subtitulo);
+            $("#thBaselineLabel").text(dados.labelBaseline);
+            $("#cntAtrasadas").text(dados.atrasadas);
+            $("#cntAdiantadas").text(dados.adiantadas);
+            $("#cntNoPrazo").text(dados.noPrazo);
+
+            // Preenche o banner
+            const $banner =$("#compareImpactBanner");
+            $banner.removeClass("alert-success alert-danger alert-info").addClass(dados.bannerClasse).text(dados.bannerTexto);
+
+            // Preenche a tabela
+            const $tbody =$("#tbodyCompareTasks").empty();
+            dados.linhas.forEach(l => {
+                $tbody.append(`
+                    <tr>
+                        <td class="fw-medium">${l.nome}</td>
+                        <td class="text-center text-muted">${l.baseRange}</td>
+                        <td class="text-center">${l.atualRange}</td>
+                        <td class="text-end ${l.classeDesvio}">${l.textoDesvio}</td>
+                    </tr>
+                `);
+            });
+        }
+    });
+</script>

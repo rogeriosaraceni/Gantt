@@ -444,10 +444,194 @@
             modal.show();
         });
 
+        // Função para atualizar o relatório comparativo do modal
+        function atualizarRelatorioComparativo(indiceVersao) {
+            if (!estado.baselines || estado.baselines.length === 0) return;
+
+            // Se não passar o índice, pega o último salvo
+            if (indiceVersao === undefined || indiceVersao === null) {
+                indiceVersao = estado.baselines.length - 1;
+            }
+
+            const baselineInfo = estado.baselines[indiceVersao];
+            $("#compareBaselineSub").text(`Comparação com a ${baselineInfo.texto}`);
+            $("#thBaselineLabel").text(`Linha de base ${baselineInfo.versao}`);
+
+            let totalAtrasadas = 0;
+            let totalAdiantadas = 0;
+            let totalNoPrazo = 0;
+            let maiorAtrasoFim = 0;
+
+            const $tbody =$("#tbodyCompareTasks").empty();
+
+            estado.tasks.forEach((tarefa) => {
+                if (tarefa.group) return; // ignora linhas de grupo se quiser focar apenas nas tarefas filhas
+
+                // Datas da linha de base
+                const dtBaseIni = tarefa.baseline?.[0] || tarefa.planned?.[0] || "";
+                const dtBaseFim = tarefa.baseline?.[1] || tarefa.planned?.[1] || "";
+
+                // Datas atuais (prioriza as datas do real se existirem, senão usa planejada)
+                const dtAtualIni = tarefa.real?.[0] || tarefa.planned?.[0] || "";
+                const dtAtualFim = tarefa.real?.[1] || tarefa.planned?.[1] || "";
+
+                // Cálculo da diferença de dias no término
+                let desvioTexto = "No prazo";
+                let classeDesvio = "text-desvio-noprazo";
+
+                if (dtBaseFim && dtAtualFim) {
+                    const dBaseFim = analisarData(dtBaseFim);
+                    const dAtualFim = analisarData(dtAtualFim);
+                    const diffDias = diferencaDias(dBaseFim, dAtualFim);
+
+                    if (diffDias > 0) {
+                        desvioTexto = `+${diffDias} dia(s)`;
+                        classeDesvio = "text-desvio-atrasado";
+                        totalAtrasadas++;
+                        if (diffDias > maiorAtrasoFim) maiorAtrasoFim = diffDias;
+                    } else if (diffDias < 0) {
+                        desvioTexto = `${diffDias} dia(s)`;
+                        classeDesvio = "text-desvio-adiantado";
+                        totalAdiantadas++;
+                    } else {
+                        totalNoPrazo++;
+                    }
+                } else {
+                    totalNoPrazo++;
+                }
+
+                const baseRangeStr = (dtBaseIni && dtBaseFim) ? `${formatarDataBR(dtBaseIni)} — ${formatarDataBR(dtBaseFim)}` : "—";
+                const atualRangeStr = (dtAtualIni && dtAtualFim) ? `${formatarDataBR(dtAtualIni)} — ${formatarDataBR(dtAtualFim)}` : "—";
+
+                $tbody.append(`
+                    <tr>
+                        <td class="fw-medium">${escaparHtml(tarefa.no)} ${escaparHtml(tarefa.name)}</td>
+                        <td class="text-center text-muted">${baseRangeStr}</td>
+                        <td class="text-center">${atualRangeStr}</td>
+                        <td class="text-end ${classeDesvio}">${desvioTexto}</td>
+                    </tr>
+                `);
+            });
+
+            // Atualiza os contadores
+            $("#cntAtrasadas").text(totalAtrasadas);
+            $("#cntAdiantadas").text(totalAdiantadas);
+            $("#cntNoPrazo").text(totalNoPrazo);
+
+            // Banner de Impacto Geral
+            const $banner =$("#compareImpactBanner");
+            if (maiorAtrasoFim > 0) {
+                $banner
+                    .removeClass("alert-success alert-info")
+                    .addClass("alert-danger")
+                    .text(`Impacto no prazo final do projeto: atraso de ${maiorAtrasoFim} dia(s)`);
+            } else if (totalAdiantadas > 0 && totalAtrasadas === 0) {
+                $banner
+                    .removeClass("alert-success alert-danger")
+                    .addClass("alert-info")
+                    .text(`Impacto no prazo final do projeto: adiantado em relação à linha de base`);
+            } else {
+                $banner
+                    .removeClass("alert-danger alert-info")
+                    .addClass("alert-success")
+                    .text(`Impacto no prazo final do projeto: sem alteração`);
+            }
+        }
+
+        // Evento de clique no botão "Comparar linha de base"
         $("#btnCompare").on("click", function () {
-            compararLinhaBase = !compararLinhaBase;
-            $(this).toggleClass("active btn-secondary btn-outline-secondary");
-            renderizar();
+            if (!estado.baselines || estado.baselines.length === 0) {
+                alert("Nenhuma linha de base foi salva ainda.");
+                return;
+            }
+
+            const ultIndex = estado.baselines.length - 1;
+            const baselineInfo = estado.baselines[ultIndex];
+
+            let totalAtrasadas = 0, totalAdiantadas = 0, totalNoPrazo = 0, maiorAtrasoFim = 0;
+            const linhasTabela = [];
+
+            estado.tasks.forEach((tarefa) => {
+                if (tarefa.group) return;
+
+                const dtBaseIni = tarefa.baseline?.[0] || tarefa.planned?.[0] || "";
+                const dtBaseFim = tarefa.baseline?.[1] || tarefa.planned?.[1] || "";
+                const dtAtualIni = tarefa.real?.[0] || tarefa.planned?.[0] || "";
+                const dtAtualFim = tarefa.real?.[1] || tarefa.planned?.[1] || "";
+
+                let desvioTexto = "No prazo";
+                let classeDesvio = "text-desvio-noprazo";
+
+                if (dtBaseFim && dtAtualFim) {
+                    const diffDias = diferencaDias(analisarData(dtBaseFim), analisarData(dtAtualFim));
+                    if (diffDias > 0) {
+                        desvioTexto = `+${diffDias} dia(s)`;
+                        classeDesvio = "text-desvio-atrasado";
+                        totalAtrasadas++;
+                        if (diffDias > maiorAtrasoFim) maiorAtrasoFim = diffDias;
+                    } else if (diffDias < 0) {
+                        desvioTexto = `${diffDias} dia(s)`;
+                        classeDesvio = "text-desvio-adiantado";
+                        totalAdiantadas++;
+                    } else {
+                        totalNoPrazo++;
+                    }
+                } else {
+                    totalNoPrazo++;
+                }
+
+                linhasTabela.push({
+                    nome: `${tarefa.no || ''} ${tarefa.name}`,
+                    baseRange: (dtBaseIni && dtBaseFim) ? `${formatarDataBR(dtBaseIni)} — ${formatarDataBR(dtBaseFim)}` : "—",
+                    atualRange: (dtAtualIni && dtAtualFim) ? `${formatarDataBR(dtAtualIni)} — ${formatarDataBR(dtAtualFim)}` : "—",
+                    textoDesvio: desvioTexto,
+                    classeDesvio: classeDesvio
+                });
+            });
+
+            // Define o banner de impacto
+            let bannerTexto = "Impacto no prazo final do projeto: sem alteração";
+            let bannerClasse = "alert-success";
+
+            if (maiorAtrasoFim > 0) {
+                bannerTexto = `Impacto no prazo final do projeto: atraso de ${maiorAtrasoFim} dia(s)`;
+                bannerClasse = "alert-danger";
+            } else if (totalAdiantadas > 0 && totalAtrasadas === 0) {
+                bannerTexto = "Impacto no prazo final do projeto: adiantado em relação à linha de base";
+                bannerClasse = "alert-info";
+            }
+
+            // Passa o objeto de dados para a variável global lida pelo iframe
+            window.dadosComparacaoGantt = {
+                subtitulo: `Comparação com a ${baselineInfo.texto}`,
+                labelBaseline: `Linha de base ${baselineInfo.versao}`,
+                atrasadas: totalAtrasadas,
+                adiantadas: totalAdiantadas,
+                noPrazo: totalNoPrazo,
+                bannerTexto: bannerTexto,
+                bannerClasse: bannerClasse,
+                linhas: linhasTabela
+            };
+
+            // Dispara o Magnific Popup em modo Iframe
+            $.magnificPopup.open({
+                items: {
+                    src: '/popups/compara-linha-base'
+                },
+                type: 'iframe',
+                iframe: {
+                    markup: '<div class="mfp-iframe-scaler" style="padding-top: 80vh;">'+
+                            '<div class="mfp-close"></div>'+
+                            '<iframe class="mfp-iframe" frameborder="0" allowfullscreen></iframe>'+
+                            '</div>'
+                }
+            });
+        });
+
+        // Evento para quando o usuário trocar a versão de linha de base no Select
+        $(document).on("change", "#selectCompareBaseline", function () {
+            const selectedIdx = Number($(this).val());
+            atualizarRelatorioComparativo(selectedIdx);
         });
 
         $(".column-toggle").on("change", function () {
