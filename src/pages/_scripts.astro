@@ -1,122 +1,11 @@
----
-
----
+<script is:inline src="/data/responsaveis.js"></script>
+<script is:inline src="/data/estado.js"></script>
 
 <script is:inline>
     $(function () {
-        const responsaveis = [
-            "Ana Paula Silva",
-            "Ricardo Alves",
-            "Juliana Martins",
-            "Thiago Souza",
-            "Camila Ferreira",
-            "Carlos Mendes",
-            "Eduardo Santos",
-            "Lanna Souza",
-            "Marcos Lima",
-            "Beatriz Nunes",
-            "Rafael Costa",
-            "Patrícia Gomes",
-        ];
-
         let escalaAtual = "month";
         let compararLinhaBase = false;
-        let linhaBaseSalva = false;
         let proximoId = 20;
-
-        const estado = {
-            tasks: [
-                {
-                    id: 1,
-                    no: "1",
-                    name: "Planejamento e Mobilização",
-                    group: true,
-                    owner: "",
-                    planned: ["2026-01-01", "2026-02-19"],
-                    real: ["", ""],
-                    pred: "",
-                    progress: null,
-                },
-                {
-                    id: 2,
-                    no: "1.1",
-                    name: "Levantamento de Requisitos",
-                    owner: "Ana Paula Silva",
-                    planned: ["2026-01-15", "2026-02-19"],
-                    real: ["2026-01-16", "2026-02-18"],
-                    pred: "",
-                    progress: 100,
-                },
-
-                {
-                    id: 3,
-                    no: "2",
-                    name: "Implementação Módulo Financeiro",
-                    group: true,
-                    owner: "",
-                    planned: ["2026-02-20", "2026-09-25"],
-                    real: ["", ""],
-                    pred: "",
-                    progress: null,
-                },
-                {
-                    id: 4,
-                    no: "2.1",
-                    name: "Integração Bancária",
-                    owner: "Ricardo Alves",
-                    planned: ["2026-06-10", "2026-09-25"],
-                    real: ["2026-03-20", ""],
-                    pred: "",
-                    progress: 30,
-                    critical: true,
-                    overdue: true,
-                },
-
-                {
-                    id: 5,
-                    no: "3",
-                    name: "Implementação Módulo RH",
-                    group: true,
-                    owner: "",
-                    planned: ["2026-09-26", "2026-12-28"],
-                    real: ["", ""],
-                    pred: "",
-                    progress: null,
-                },
-                {
-                    id: 6,
-                    no: "3.1",
-                    name: "Folha de Pagamento",
-                    owner: "Thiago Souza",
-                    planned: ["2026-09-26", "2026-11-10"],
-                    real: ["", ""],
-                    pred: "2.1",
-                    progress: 0,
-                },
-
-                {
-                    id: 7,
-                    no: "4",
-                    name: "Go-Live e Sustentação",
-                    group: true,
-                    owner: "",
-                    planned: ["2026-12-29", "2027-02-12"],
-                    real: ["", ""],
-                    pred: "",
-                    progress: null,
-                },
-                {
-                    id: 8,
-                    no: "4.1",
-                    name: "Treinamento de Usuários",
-                    owner: "Camila Ferreira",
-                    planned: ["2026-12-29", "2027-02-11"],
-                    real: ["", ""],
-                    pred: "3.2",
-                    progress: 0,
-                },
-            ],
-        };
 
         function escaparHtml(valor) {
             return String(valor ?? "")
@@ -132,39 +21,26 @@
             return new Date(ano, mes - 1, dia);
         }
 
-        function formatarData(textoData) {
-            if (!textoData) return "";
-
-            const objetoData = analisarData(textoData);
-            const dia = String(objetoData.getDate()).padStart(2, "0");
-            const mes = String(objetoData.getMonth() + 1).padStart(2, "0");
-            const ano = objetoData.getFullYear();
-
-            return `${dia}/${mes}/${ano}`;
-        }
-
         function paraISO(objetoData) {
+            if (!objetoData) return "";
             const ano = objetoData.getFullYear();
             const mes = String(objetoData.getMonth() + 1).padStart(2, "0");
             const dia = String(objetoData.getDate()).padStart(2, "0");
-
             return `${ano}-${mes}-${dia}`;
         }
 
-        function adicionarDias(dataInicial, diasParaAdicionar) {
-            const dataResultado = new Date(dataInicial);
-            dataResultado.setDate(dataResultado.getDate() + diasParaAdicionar);
-            return dataResultado;
+        function adicionarDias(dataInicial, dias) {
+            const res = new Date(dataInicial);
+            res.setDate(res.getDate() + dias);
+            return res;
         }
 
         function inicioDaSemana(data) {
             const dataSegunda = new Date(data);
             const diaDaSemana = dataSegunda.getDay();
             const diasAteSegunda = diaDaSemana === 0 ? -6 : 1 - diaDaSemana;
-
             dataSegunda.setDate(dataSegunda.getDate() + diasAteSegunda);
             dataSegunda.setHours(0, 0, 0, 0);
-
             return dataSegunda;
         }
 
@@ -177,8 +53,16 @@
         }
 
         function diferencaDias(dataInicial, dataFinal) {
-            const milissegundosPorDia = 86400000;
-            return Math.round((dataFinal - dataInicial) / milissegundosPorDia);
+            const msPorDia = 86400000;
+            return Math.round((dataFinal - dataInicial) / msPorDia);
+        }
+
+        function obterSemanaISO(data) {
+            const dataUtc = new Date(Date.UTC(data.getFullYear(), data.getMonth(), data.getDate()));
+            const diaDaSemana = dataUtc.getUTCDay() || 7;
+            dataUtc.setUTCDate(dataUtc.getUTCDate() + 4 - diaDaSemana);
+            const dataInicioAno = new Date(Date.UTC(dataUtc.getUTCFullYear(), 0, 1));
+            return Math.ceil(((dataUtc - dataInicioAno) / 86400000 + 1) / 7);
         }
 
         function intervaloParaEscala() {
@@ -186,14 +70,16 @@
             let dataMax = new Date(2027, 1, 28);
 
             estado.tasks.forEach((tarefa) => {
-                const todasDatas = [...(tarefa.planned || []), ...(tarefa.real || [])];
-
+                const todasDatas = [
+                    ...(tarefa.planned || []),
+                    ...(tarefa.baseline || []),
+                    ...(tarefa.real || [])
+                ];
                 todasDatas.forEach((textoData) => {
-                    const dataAnalisada = analisarData(textoData);
-                    if (!dataAnalisada) return;
-
-                    if (dataAnalisada < dataMin) dataMin = new Date(dataAnalisada);
-                    if (dataAnalisada > dataMax) dataMax = new Date(dataAnalisada);
+                    const d = analisarData(textoData);
+                    if (!d) return;
+                    if (d < dataMin) dataMin = new Date(d);
+                    if (d > dataMax) dataMax = new Date(d);
                 });
             });
 
@@ -213,12 +99,8 @@
         }
 
         function configuracaoUnidade() {
-            if (escalaAtual === "week") {
-                return { unitDays: 7, width: 90 };
-            }
-            if (escalaAtual === "year") {
-                return { unitDays: 365, width: 220 };
-            }
+            if (escalaAtual === "week") return { unitDays: 7, width: 90 };
+            if (escalaAtual === "year") return { unitDays: 365, width: 220 };
             return { unitDays: 30, width: 110 };
         }
 
@@ -259,495 +141,279 @@
                 }
             }
 
-            return {
-                arr: listaPeriodos,
-                min: dataMin,
-                max: dataMax,
-                cfg: configuracao
-            };
-        }
-
-        function obterSemanaISO(data) {
-            const dataUtc = new Date(Date.UTC(data.getFullYear(), data.getMonth(), data.getDate()));
-            const diaDaSemana = dataUtc.getUTCDay() || 7;
-
-            dataUtc.setUTCDate(dataUtc.getUTCDate() + 4 - diaDaSemana);
-
-            const dataInicioAno = new Date(Date.UTC(dataUtc.getUTCFullYear(), 0, 1));
-            const milissegundosPorDia = 86400000;
-            const diasDeDiferenca = (dataUtc - dataInicioAno) / milissegundosPorDia;
-
-            return Math.ceil((diasDeDiferenca + 1) / 7);
-        }
-
-        function larguraLinhaDoTempo() {
-            const dadosPeriodos = periodos();
-            return dadosPeriodos.arr.length * dadosPeriodos.cfg.width;
+            return { arr: listaPeriodos, min: dataMin, max: dataMax, cfg: configuracao };
         }
 
         function posicaoParaData(textoData) {
-            const dadosPeriodos = periodos();
-            const dataAnalisada = analisarData(textoData);
-            if (!dataAnalisada) return 0;
-
-            const diasDecorridos = diferencaDias(dadosPeriodos.min, dataAnalisada);
-            return (diasDecorridos / dadosPeriodos.cfg.unitDays) * dadosPeriodos.cfg.width;
+            const dados = periodos();
+            const d = analisarData(textoData);
+            if (!d) return 0;
+            const dias = diferencaDias(dados.min, d);
+            return (dias / dados.cfg.unitDays) * dados.cfg.width;
         }
 
-        function larguraParaIntervalo(textoDataInicial, textoDataFinal) {
-            if (!textoDataInicial || !textoDataFinal) return 0;
+        function larguraParaIntervalo(textoIni, textoFim) {
+            if (!textoIni || !textoFim) return 0;
+            const dIni = analisarData(textoIni);
+            const dFim = analisarData(textoFim);
+            if (!dIni || !dFim) return 0;
 
-            const dataInicial = analisarData(textoDataInicial);
-            const dataFinal = analisarData(textoDataFinal);
-
-            if (!dataInicial || !dataFinal) return 0;
-
-            const configuracao = configuracaoUnidade();
-            const totalDias = diferencaDias(dataInicial, dataFinal) + 1;
-            const larguraCalculada = (totalDias / configuracao.unitDays) * configuracao.width;
-
-            return Math.max(6, larguraCalculada);
+            const cfg = configuracaoUnidade();
+            const dias = diferencaDias(dIni, dFim) + 1;
+            return Math.max(6, (dias / cfg.unitDays) * cfg.width);
         }
 
         function opcoesResponsavel(selecionado) {
             let html = '<option value="">—</option>';
-
-            responsaveis.forEach((responsavel) => {
-                html += `
-                    <option value="${escaparHtml(responsavel)}"${responsavel === selecionado ? ' selected' : ''}>
-                        ${escaparHtml(responsavel)}
-                    </option>
-                `;
+            responsaveis.forEach((resp) => {
+                html += `<option value="${escaparHtml(resp)}"${resp === selecionado ? " selected" : ""}>${escaparHtml(resp)}</option>`;
             });
             return html;
         }
 
-        function opcoesPredecessora(numeroTarefaSelecionada) {
-            let htmlOpcoes = '<option value="">Nenhuma</option>';
-
+        function opcoesPredecessora(numeroSelecionado) {
+            let html = '<option value="">Nenhuma</option>';
             estado.tasks
-                .filter((tarefa) => !tarefa.group)
-                .forEach((tarefa) => {
-                    const selecionado = tarefa.no === numeroTarefaSelecionada ? " selected" : "";
-                    const rotuloTarefa = `${tarefa.no} — ${tarefa.name}`;
-
-                    htmlOpcoes += `
-                        <option value="${escaparHtml(tarefa.no)}"${selecionado}>
-                            ${escaparHtml(rotuloTarefa)}
-                        </option>
-                    `;
+                .filter((t) => !t.group)
+                .forEach((t) => {
+                    html += `<option value="${escaparHtml(t.no)}"${t.no === numeroSelecionado ? " selected" : ""}>${escaparHtml(t.no + " — " + t.name)}</option>`;
                 });
+            return html;
+        }
 
-            return htmlOpcoes;
+        function htmlIntervaloData(tarefa, tipo) {
+            const datas = tarefa[tipo] || ["", ""];
+            return `
+                <div class="date-range">
+                    <input type="date" class="form-control form-control-sm date-input" data-field="${tipo}" data-index="0" value="${datas[0] || ""}">
+                    <span>—</span>
+                    <input type="date" class="form-control form-control-sm date-input" data-field="${tipo}" data-index="1" value="${datas[1] || ""}">
+                </div>
+            `;
+        }
+
+        function verificarAtraso(tarefa) {
+            const dataFimPlan = analisarData(tarefa.planned?.[1]);
+            const dataFimReal = analisarData(tarefa.real?.[1]);
+            const hoje = new Date();
+
+            if (!dataFimPlan) return false;
+            if (dataFimReal && dataFimReal > dataFimPlan) return true;
+            if (!dataFimReal && tarefa.real?.[0] && hoje > dataFimPlan && (tarefa.progress ?? 0) < 100) return true;
+
+            return false;
         }
 
         function renderizarEsquerda() {
-            const colunaVisivel = {
-                owner: $(".column-toggle[value='owner']").is(":checked"),
-                planned: $(".column-toggle[value='planned']").is(":checked"),
-                real: $(".column-toggle[value='real']").is(":checked"),
-                predecessors: $(".column-toggle[value='predecessors']").is(":checked"),
-                progress: $(".column-toggle[value='progress']").is(":checked"),
-            };
-
-            $("#leftBody [data-bs-toggle='tooltip']").each(function () {
-                const instanciaTooltip = bootstrap.Tooltip.getInstance(this);
-                if (instanciaTooltip) instanciaTooltip.dispose();
-            });
-
-            const $corpoTabelaEsquerda = $("#leftBody").empty();
+            const $body =$("#leftBody").empty();
 
             estado.tasks.forEach((tarefa) => {
-                const classeLinha = tarefa.group ? "group-row" : "child";
-                const valorProgresso = tarefa.progress == null ? 0 : tarefa.progress;
+                const isGroup = tarefa.group;
+                const classeLinha = isGroup ? "group-row" : "child";
+                const emAtraso = verificarAtraso(tarefa);
 
-                $corpoTabelaEsquerda.append(`
+                $body.append(`
                     <tr class="${classeLinha}" data-id="${tarefa.id}">
                         <td class="text-center text-secondary">${escaparHtml(tarefa.no)}</td>
                         <td class="activity-cell">
                             <div class="d-flex align-items-center gap-1">
-                                <input class="activity-input" data-field="name" value="${escaparHtml(tarefa.name)}" ${tarefa.group ? 'style="font-weight:600"' : ""}>
-                                ${tarefa.critical ? '<i class="bi bi-exclamation-triangle-fill status-critical" title="Crítico"></i>' : ""}
-                                ${tarefa.overdue ? '<i class="bi bi-fire status-overdue" title="Atrasado"></i>' : ""}
+                                <input class="activity-input" data-field="name" value="${escaparHtml(tarefa.name)}" ${isGroup ? 'style="font-weight:600"' : ""}>
+                                ${tarefa.critical ? '<i class="bi bi-exclamation-triangle-fill status-critical" data-bs-toggle="tooltip" data-bs-title="Crítico"></i>' : ""}
+                                ${emAtraso ? '<i class="bi bi-fire status-overdue"  data-bs-toggle="tooltip" data-bs-title="Atrasado"></i>' : ""}
                             </div>
                         </td>
                         <td class="col-owner">
-                            ${tarefa.group ? "<span>—</span>" : `<select class="owner-select" data-field="owner">${opcoesResponsavel(tarefa.owner)}</select>`}
+                            ${isGroup ? "<span>—</span>" : `<select class="owner-select" data-field="owner">${opcoesResponsavel(tarefa.owner)}</select>`}
                         </td>
                         <td class="col-planned">
-                            ${tarefa.group ? "<span>—</span>" : htmlIntervaloData(tarefa, "planned")}
+                            ${isGroup ? "<span>—</span>" : htmlIntervaloData(tarefa, "planned")}
                         </td>
                         <td class="col-real">
-                            ${tarefa.group ? "<span>—</span>" : htmlIntervaloData(tarefa, "real")}
+                            ${isGroup ? "<span>—</span>" : htmlIntervaloData(tarefa, "real")}
                         </td>
                         <td class="col-predecessors">
-                            ${tarefa.group ? "<span>—</span>" : `<select class="pred-select" data-field="pred">${opcoesPredecessora(tarefa.pred)}</select>`}
+                            ${isGroup ? "<span>—</span>" : `<select class="pred-select" data-field="pred">${opcoesPredecessora(tarefa.pred)}</select>`}
                         </td>
                         <td class="col-progress">
-                            <input type="number" min="0" max="100" class="progress-input" data-field="progress" value="${valorProgresso}" ${tarefa.group ? "disabled" : ""}>
+                            ${isGroup ? "<span>—</span>" : `<input type="number" min="0" max="100" class="progress-input" data-field="progress" value="${tarefa.progress ?? 0}">`}
                         </td>
                         <td class="text-center">
-                            <button type="button" class="delete-btn" data-delete="${tarefa.id}" data-bs-toggle="tooltip" data-bs-title="Excluir">
-                                <i class="bi bi-trash3"></i>
-                            </button>
+                            <button class="delete-btn btn-del" data-id="${tarefa.id}"><i class="bi bi-trash"></i></button>
                         </td>
                     </tr>
                 `);
             });
 
-            $(".col-owner").toggle(colunaVisivel.owner);
-            $(".col-planned").toggle(colunaVisivel.planned);
-            $(".col-real").toggle(colunaVisivel.real);
-            $(".col-predecessors").toggle(colunaVisivel.predecessors);
-            $(".col-progress").toggle(colunaVisivel.progress);
-
-            $("#leftBody [data-bs-toggle='tooltip']").each(function () {
-                new bootstrap.Tooltip(this);
-            });
-
-            sincronizarLarguraEsquerda();
+            atualizarVisibilidadeColunas();
         }
 
-        function htmlIntervaloData(tarefa, nomeCampo) {
-            const valoresData = tarefa[nomeCampo] || ["", ""];
-            const [dataInicial = "", dataFinal = ""] = valoresData;
+        function renderizarDireita() {
+            const p = periodos();
+            const totalWidth = p.arr.length * p.cfg.width;
 
-            return `
-                <div class="date-range">
-                    <input type="date" data-field="${nomeCampo}" data-index="0" value="${dataInicial}">
-                    <span class="text-secondary">–</span>
-                    <input type="date" data-field="${nomeCampo}" data-index="1" value="${dataFinal}">
-                </div>
-            `;
-        }
-
-        function renderizarLinhaDoTempo() {
-            const dadosPeriodos = periodos();
-            const larguraTotal = larguraLinhaDoTempo();
-
-            $("#timelineContainer").css({
-                "--timeline-width": `${larguraTotal}px`,
-                "--unit-width": `${dadosPeriodos.cfg.width}px`,
+            let headerHtml = `<div class="timeline-header d-flex" style="width:${totalWidth}px;">`;
+            p.arr.forEach((per) => {
+                headerHtml += `<div class="period-label" style="width:${p.cfg.width}px; flex: 0 0 ${p.cfg.width}px;">${per.label}</div>`;
             });
+            headerHtml += `</div>`;
+            $("#timelineHeader").html(headerHtml);
 
-            let htmlCabecalho = "";
-            dadosPeriodos.arr.forEach((periodo, indice) => {
-                const posicaoEsquerda = indice * dadosPeriodos.cfg.width;
-                htmlCabecalho += `
-                    <div class="period-label" style="left:${posicaoEsquerda}px;width:${dadosPeriodos.cfg.width}px">
-                        ${escaparHtml(periodo.label)}
-                    </div>
-                `;
-            });
-
-            $("#timelineHeader").html(htmlCabecalho);
-
-            $("#timelineBody [data-bs-toggle='tooltip']").each(function () {
-                const instanciaTooltip = bootstrap.Tooltip.getInstance(this);
-                if (instanciaTooltip) instanciaTooltip.dispose();
-            });
-
-            const $corpoLinhaDoTempo = $("#timelineBody").empty();
+            const $body =$("#timelineBody").empty().css("width", `${totalWidth}px`);
 
             estado.tasks.forEach((tarefa) => {
-                const elementoLinha = $('<div class="timeline-row"></div>');
-                if (tarefa.group) elementoLinha.addClass("group");
+                const $row =$(`<div class="timeline-row ${tarefa.group ? "group" : ""}" style="width:${totalWidth}px;"></div>`);
 
-                const elementoGrade = $('<div class="timeline-grid"></div>');
-                dadosPeriodos.arr.forEach(() => elementoGrade.append("<span></span>"));
-                elementoLinha.append(elementoGrade);
+                const posHoje = posicaoParaData(paraISO(new Date()));
+                if (posHoje > 0 && posHoje < totalWidth) {
+                    $row.append(`<div class="today-line" style="left:${posHoje}px;"></div>`);
+                }
 
-                if (tarefa.planned && tarefa.planned[0] && tarefa.planned[1]) {
-                    const posicaoEsquerdaTarefa = posicaoParaData(tarefa.planned[0]);
-                    const larguraTarefa = larguraParaIntervalo(tarefa.planned[0], tarefa.planned[1]);
-
-                    if (compararLinhaBase && tarefa.baseline) {
-                        const posicaoEsquerdaLinhaBase = posicaoParaData(tarefa.baseline[0]);
-                        const larguraLinhaBase = larguraParaIntervalo(tarefa.baseline[0], tarefa.baseline[1]);
-                        elementoLinha.append(
-                            $(`<span class="bar baseline-bar" data-bs-toggle="tooltip" data-bs-title="Linha de base"></span>`).css({
-                                left: posicaoEsquerdaLinhaBase,
-                                width: larguraLinhaBase,
-                            })
-                        );
-                    }
-
-                    const progressoTarefa = tarefa.progress == null ? 100 : tarefa.progress;
-                    const tituloBarra = `${tarefa.name} — ${progressoTarefa}%`;
-
-                    const barraTarefa = $(`
-                        <button type="button" class="bar
-                            ${tarefa.group ? "group-bar" : "task-bar"}
-                            ${tarefa.critical ? " critical" : ""}
-                            ${tarefa.overdue ? " overdue" : ""}"
+                // Linha Base (Fina, Cinza)
+                const baselineDates = compararLinhaBase ? (tarefa.baseline || tarefa.planned) : tarefa.planned;
+                if (baselineDates && baselineDates[0] && baselineDates[1]) {
+                    const leftBase = posicaoParaData(baselineDates[0]);
+                    const widthBase = larguraParaIntervalo(baselineDates[0], baselineDates[1]);
+                    $row.append(`
+                        <div
+                            class="bar baseline-bar"
+                            style="left:${leftBase}px; width:${widthBase}px;"
                             data-bs-toggle="tooltip"
-                            data-bs-title="${escaparHtml(tituloBarra)}">
-                        </button>
+                            data-bs-title="Linha de Base: ${baselineDates[0]} a ${baselineDates[1]}"
+                        ></div>
                     `);
-
-                    barraTarefa.css({ left: posicaoEsquerdaTarefa, width: larguraTarefa });
-
-                    if (!tarefa.group) {
-                        const percentualProgresso = Math.max(0, Math.min(100, tarefa.progress || 0));
-                        const elementoPreenchimento = $('<span class="progress-fill"></span>').css({
-                            width: `${percentualProgresso}%`,
-                        });
-                        barraTarefa.append(elementoPreenchimento);
-                    }
-
-                    elementoLinha.append(barraTarefa);
                 }
 
-                $corpoLinhaDoTempo.append(elementoLinha);
-            });
+                // Barra Principal
+                const usaReal = Boolean(tarefa.real && tarefa.real[0]);
+                const dataInicioBarra = usaReal ? tarefa.real[0] : tarefa.planned?.[0];
 
-            $("#timelineBody [data-bs-toggle='tooltip']").each(function () {
-                new bootstrap.Tooltip(this);
+                let dataFimBarra = usaReal ? tarefa.real[1] : tarefa.planned?.[1];
+                if (usaReal && !dataFimBarra) {
+                    dataFimBarra = paraISO(new Date());
+                }
+
+                if (dataInicioBarra && dataFimBarra) {
+                    const left = posicaoParaData(dataInicioBarra);
+                    const width = larguraParaIntervalo(dataInicioBarra, dataFimBarra);
+                    const emAtraso = verificarAtraso(tarefa);
+
+                    let barClass = "bar task-bar";
+                    if (tarefa.group) barClass = "bar group-bar";
+                    if (emAtraso) barClass += " overdue";
+                    else if (tarefa.critical) barClass += " critical";
+
+                    const pct = Math.min(100, Math.max(0, tarefa.progress ?? 0));
+                    const fillHtml = !tarefa.group ? `<div class="progress-fill" style="width:${pct}%;"></div>` : "";
+
+                    $row.append(`
+                        <div
+                            class="${barClass}"
+                            style="left:${left}px;
+                            width:${width}px;"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="${tarefa.name} (${pct}%)"
+                        >
+                            ${fillHtml}
+                        </div>
+                    `);
+                }
+
+                $body.append($row);
             });
         }
 
-        function sincronizarLarguraEsquerda() {
-            // Permite que a tabela esquerda tenha scroll horizontal se as colunas
-            // selecionadas excederem a largura do bloco congelado.
-            const quantidadeColunasSelecionadas = $(".column-toggle:checked").length;
-
-            const larguraCalculada =
-                48 +
-                230 +
-                (quantidadeColunasSelecionadas >= 1 ? 125 : 0) +
-                (quantidadeColunasSelecionadas >= 2 ? 205 : 0) +
-                (quantidadeColunasSelecionadas >= 3 ? 205 : 0) +
-                (quantidadeColunasSelecionadas >= 4 ? 120 : 0) +
-                (quantidadeColunasSelecionadas >= 5 ? 58 : 0) +
-                46;
-
-            const larguraMinimaTabela = Math.max(760, larguraCalculada);
-
-            $(".left-table").css({
-                "min-width": `${larguraMinimaTabela}px`,
-                "width": `${larguraMinimaTabela}px`
-            });
-        }
-
-        function renderizarTudo() {
+        function renderizar() {
             renderizarEsquerda();
-            renderizarLinhaDoTempo();
+            renderizarDireita();
         }
 
-        // Atualiza dados sem precisar reconstruir a linha inteira.
-        $("#leftBody").on("input change", "[data-field]", function () {
-            const $elemento = $(this);
-            const idTarefa = Number($elemento.closest("tr").data("id"));
-            const tarefaAtual = estado.tasks.find((tarefa) => tarefa.id === idTarefa);
-            if (!tarefaAtual) return;
-
-            const nomeCampo = $elemento.data("field");
-
-            if (nomeCampo === "name" || nomeCampo === "owner" || nomeCampo === "pred") {
-                tarefaAtual[nomeCampo] = $elemento.val();
-            }
-
-            if (nomeCampo === "progress") {
-                tarefaAtual.progress = Math.max(0, Math.min(100, Number($elemento.val()) || 0));
-                renderizarLinhaDoTempo();
-            }
-
-            if (nomeCampo === "planned" || nomeCampo === "real") {
-                const indiceData = Number($elemento.data("index"));
-                tarefaAtual[nomeCampo][indiceData] = $elemento.val();
-                renderizarLinhaDoTempo();
-            }
-        });
-
-        let idTarefaExcluir = null;
-        const modalExclusao = bootstrap.Modal.getOrCreateInstance(document.getElementById("deleteActivityModal"));
-
-        $("#leftBody").on("click", "[data-delete]", function () {
-            const instanciaTooltip = bootstrap.Tooltip.getInstance(this);
-            if (instanciaTooltip) instanciaTooltip.hide();
-
-            idTarefaExcluir = Number($(this).data("delete"));
-
-            const tarefaParaExcluir = estado.tasks.find((tarefa) => tarefa.id === idTarefaExcluir);
-            if (!tarefaParaExcluir) return;
-
-            $("#deleteActivityName").text(`${tarefaParaExcluir.no} — ${tarefaParaExcluir.name}`);
-            modalExclusao.show();
-        });
-
-        $("#btnConfirmDelete").on("click", function () {
-            if (idTarefaExcluir === null) return;
-
-            estado.tasks = estado.tasks.filter((tarefa) => tarefa.id !== idTarefaExcluir);
-
-            // Mantém a sequência da coluna # depois da exclusão.
-            renumerarTarefas();
-
-            idTarefaExcluir = null;
-            modalExclusao.hide();
-            renderizarTudo();
-        });
-
-        $(".column-toggle").on("change", renderizarEsquerda);
-
-        $("[data-scale]").on("click", function () {
-            escalaAtual = $(this).data("scale");
-            $("[data-scale]").removeClass("active");
-            $(this).addClass("active");
-            renderizarLinhaDoTempo();
-        });
-
-        $("#btnAdd").on("click", function () {
-            const ultimo = estado.tasks[estado.tasks.length - 1];
-            const novaTarefa = {
-                id: proximoId++,
-                no: proximoNumeroAtividade(),
-                name: "Nova atividade",
-                owner: "",
-                planned: ["2026-09-01", "2026-09-08"],
-                real: ["", ""],
-                pred: ultimo && !ultimo.group ? ultimo.no : "",
-                progress: 0,
-            };
-
-            estado.tasks.push(novaTarefa);
-            renumerarTarefas();
-            renderizarTudo();
-
-            setTimeout(() => {
-                const $linha =$(` #leftBody tr[data-id="${novaTarefa.id}"]`);
-                $("#leftScroll").scrollTop($("#leftScroll")[0].scrollHeight);
-                $linha.find(".activity-input").trigger("focus").select();
-            }, 20);
-        });
-
-        function renumerarTarefas() {
-            let indiceGrupo = 0;
-            let indiceFilho = 0;
-
-            estado.tasks.forEach((tarefa) => {
-                if (tarefa.group) {
-                    indiceGrupo++;
-                    indiceFilho = 0;
-                    tarefa.no = String(indiceGrupo);
-                } else {
-                    // Se não houver grupo anterior, cria uma numeração de atividade simples.
-                    if (indiceGrupo === 0) {
-                        const indiceTarefaAtual = estado.tasks.indexOf(tarefa) + 1;
-                        tarefa.no = String(indiceTarefaAtual);
-                        return;
-                    }
-
-                    indiceFilho++;
-                    tarefa.no = `${indiceGrupo}.${indiceFilho}`;
-                }
+        function atualizarVisibilidadeColunas() {
+            $(".column-toggle").each(function () {
+                const colName = $(this).val();
+                const visible = $(this).is(":checked");
+                $(`.col-${colName}`).toggle(visible);
             });
         }
 
-        function proximoNumeroAtividade() {
-            // Nova atividade entra no último grupo existente.
-            let ultimoIndiceGrupo = 0;
-            let indiceFilho = 0;
+        // EVENTOS
+        $(document).on("change input", ".activity-input, .owner-select, .pred-select, .progress-input, .date-input", function () {
+            const $row =$(this).closest("tr");
+            const id = Number($row.data("id"));
+            const task = estado.tasks.find((t) => t.id === id);
+            if (!task) return;
 
-            for (let i = 0; i < estado.tasks.length; i++) {
-                const tarefaAtual = estado.tasks[i];
+            const field = $(this).data("field");
 
-                if (tarefaAtual.group) {
-                    ultimoIndiceGrupo = Number(tarefaAtual.no) || ultimoIndiceGrupo + 1;
-                    indiceFilho = 0;
-                } else if (ultimoIndiceGrupo > 0) {
-                    indiceFilho++;
-                }
+            if (field === "planned" || field === "real") {
+                const index = Number($(this).data("index"));
+                if (!task[field]) task[field] = ["", ""];
+                task[field][index] = $(this).val();
+            } else if (field === "progress") {
+                task.progress = Number($(this).val());
+            } else {
+                task[field] = $(this).val();
             }
 
-            const proximoIndiceFilho = indiceFilho + 1;
-            const numeroTarefaAlternativo = String(estado.tasks.length + 1);
+            renderizar();
+        });
 
-            return ultimoIndiceGrupo > 0 ? `${ultimoIndiceGrupo}.${proximoIndiceFilho}` : numeroTarefaAlternativo;
-        }
+        $(".view-switch button").on("click", function () {
+            $(".view-switch button").removeClass("active");
+            $(this).addClass("active");
+            escalaAtual = $(this).data("scale");
+            renderizar();
+        });
 
         $("#btnSaveBaseline").on("click", function () {
-            estado.tasks.forEach((tarefa) => {
-                if (tarefa.planned) {
-                    tarefa.baseline = [...tarefa.planned];
-                }
+            estado.tasks.forEach((t) => {
+                t.baseline = [...(t.planned || ["", ""])];
             });
-
-            linhaBaseSalva = true;
-            compararLinhaBase = true;
-
-            $("#btnCompare").addClass("baseline-active");
-            renderizarLinhaDoTempo();
-
-            const $botaoSalvar = $(this);
-            $botaoSalvar.html('<i class="bi bi-check-circle me-1"></i>Linha de base salva');
-
-            setTimeout(() => {
-                $botaoSalvar.html('<i class="bi bi-shield-check me-1"></i>Salvar linha de base');
-            }, 1800);
+            alert("Linha de base salva com sucesso!");
+            renderizar();
         });
 
         $("#btnCompare").on("click", function () {
-            if (!linhaBaseSalva) {
-                alert("Salve a linha de base primeiro.");
-                return;
-            }
             compararLinhaBase = !compararLinhaBase;
-            $(this).toggleClass("baseline-active", compararLinhaBase);
-            renderizarLinhaDoTempo();
+            $(this).toggleClass("active btn-secondary btn-outline-secondary");
+            renderizar();
         });
 
-        $("#btnPrev").on("click", function () {
-            const $containerLinhaDoTempo = $("#rightScroll");
-            const posicaoScrollAtual = $containerLinhaDoTempo.scrollLeft();
-            const quantidadeScroll = 500;
-            const duracaoAnimacao = 250;
-
-            $containerLinhaDoTempo.animate(
-                { scrollLeft: Math.max(0, posicaoScrollAtual - quantidadeScroll) },
-                duracaoAnimacao
-            );
+        $(".column-toggle").on("change", function () {
+            atualizarVisibilidadeColunas();
         });
 
-        $("#btnNext").on("click", function () {
-            const $containerLinhaDoTempo = $("#rightScroll");
-            const posicaoScrollAtual = $containerLinhaDoTempo.scrollLeft();
-            const quantidadeScroll = 500;
-            const duracaoAnimacao = 250;
-
-            $containerLinhaDoTempo.animate(
-                { scrollLeft: posicaoScrollAtual + quantidadeScroll },
-                duracaoAnimacao
-            );
+        $(document).on("click", ".btn-del", function () {
+            const id = Number($(this).data("id"));
+            estado.tasks = estado.tasks.filter((t) => t.id !== id);
+            renderizar();
         });
 
-        // Sincroniza o scroll vertical entre o bloco congelado e o timeline.
-        let sincronizando = false;
+        $("#btnAdd").on("click", function () {
+            proximoId++;
+            const novaTarefa = {
+                id: proximoId,
+                no: `2.${estado.tasks.length}`,
+                name: "Nova Atividade",
+                owner: "",
+                planned: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
+                baseline: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
+                real: ["", ""],
+                pred: "",
+                progress: 0,
+            };
+            estado.tasks.push(novaTarefa);
+            renderizar();
+        });
 
         $("#leftScroll").on("scroll", function () {
-            if (sincronizando) return;
-            sincronizando = true;
-            $("#rightScroll").scrollTop(this.scrollTop);
-            sincronizando = false;
+            $("#rightScroll").scrollTop($(this).scrollTop());
         });
 
         $("#rightScroll").on("scroll", function () {
-            if (sincronizando) return;
-            sincronizando = true;
-            $("#leftScroll").scrollTop(this.scrollTop);
-            sincronizando = false;
+            $("#leftScroll").scrollTop($(this).scrollTop());
+            $("#rightHeaderScroll").scrollLeft($(this).scrollLeft());
         });
 
-        // Altura igual dos dois blocos.
-        function sincronizarAlturas() {
-            const esquerda = $("#leftScroll")[0];
-            const direita = $("#rightScroll")[0];
-            if (!esquerda || !direita) return;
-            direita.scrollTop = esquerda.scrollTop;
-        }
-
-        renumerarTarefas();
-        renderizarTudo();
-        sincronizarAlturas();
+        renderizar();
     });
 </script>

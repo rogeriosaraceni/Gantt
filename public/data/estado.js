@@ -1,0 +1,106 @@
+const estado = {
+    tasks: [
+        // Planejamento e Mobilização
+        {
+            id: 1,
+            no: "1",
+            name: "Planejamento e Mobilização",
+            group: true,
+            owner: "",
+            planned: ["2026-09-01", "2026-09-19"],
+            baseline: ["2026-09-01", "2026-09-19"],
+            real: ["2026-09-01", "2026-09-18"],
+            pred: "",
+            progress: 100,
+        },
+        {
+            id: 2,
+            no: "1.1",
+            name: "Levantamento de Requisitos",
+            owner: "Ana Paula Silva",
+            planned: ["2026-09-15", "2026-09-19"],
+            baseline: ["2026-09-15", "2026-09-19"],
+            real: ["2026-09-16", "2026-09-18"],
+            pred: "",
+            progress: 100,
+        },
+
+
+        //Implementação Módulo Financeiro
+        {
+            id: 3,
+            no: "2",
+            name: "Implementação Módulo Financeiro",
+            group: true,
+            owner: "",
+            planned: ["2026-02-20", "2026-09-25"],
+            baseline: ["2026-02-20", "2026-09-25"],
+            real: ["2026-03-20", ""],
+            pred: "",
+            progress: 30,
+        },
+        {
+            id: 4,
+            no: "2.1",
+            name: "Integração Bancária",
+            owner: "Ricardo Alves",
+            planned: ["2026-06-10", "2026-09-25"],
+            baseline: ["2026-06-10", "2026-09-25"],
+            real: ["2026-03-20", ""],
+            pred: "",
+            progress: 30,
+            critical: true,
+        },
+
+        //Implementação Módulo RH
+        {
+            id: 5,
+            no: "3",
+            name: "Implementação Módulo RH",
+            group: true,
+            owner: "",
+            planned: ["2026-09-26", "2026-12-28"],
+            baseline: ["2026-09-26", "2026-12-28"],
+            real: ["", ""],
+            pred: "",
+            progress: 0,
+        },
+        {
+            id: 6,
+            no: "3.1",
+            name: "Folha de Pagamento",
+            owner: "Thiago Souza",
+            planned: ["2026-09-26", "2026-11-10"],
+            baseline: ["2026-09-26", "2026-11-10"],
+            real: ["", ""],
+            pred: "2.1",
+            progress: 0,
+        },
+
+
+        //Go-Live e Sustentação
+        {
+            id: 7,
+            no: "4",
+            name: "Go-Live e Sustentação",
+            group: true,
+            owner: "",
+            planned: ["2026-12-29", "2027-02-12"],
+            baseline: ["2026-12-29", "2027-02-12"],
+            real: ["", ""],
+            pred: "",
+            progress: 0,
+        },
+        {
+            id: 8,
+            no: "4.1",
+            name: "Treinamento de Usuários",
+            owner: "Camila Ferreira",
+            planned: ["2026-12-29", "2027-02-11"],
+            baseline: ["2026-12-29", "2027-02-11"],
+            real: ["", ""],
+            pred: "3.1",
+            progress: 0,
+        },
+    ],
+};

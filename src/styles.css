@@ -1,3 +1,20 @@
+ :root {
+    --g-border: #e3e3e1;
+    --g-header: #f5f5f4;
+    --g-muted:  #6b6b69;
+    --g-text:   #211e1c;
+    --g-primary:#8a2432;
+
+    --g-plan:    #b7c0c9;
+    --g-baseline:#82c6f3;
+    --g-real    :#d2d7dd;
+    --g-critico: #b07a2e;
+    --g-atrasado:#8a2432;
+
+    --row-h: 44px;
+    --header-h: 38px;
+}
+
 /*-----------------------------------------------------
 gantt-toolbar
 ------------------------------------------------------*/
@@ -277,6 +294,9 @@ Timeline
     height: var(--header-h);
     background: var(--g-header);
     border-bottom: 1px solid var(--g-border);
+    /* Garante alinhamento relativo para os filhos posicionados */
+    /* display: flex;
+    position: relative; */
 }
 .timeline-row {
     position: relative;
@@ -303,16 +323,21 @@ Timeline
 period-label
 ------------------------------------------------------*/
 .period-label {
-    position: absolute;
+    /* position: absolute;
     top: 0;
-    bottom: 0;
+    bottom: 0; */
     display: flex;
     align-items: center;
+    justify-content: center;
     padding: 0 8px;
     border-right: 1px solid var(--g-border);
     color: var(--g-muted);
     font-size: 10px;
     white-space: nowrap;
+    /* Garante que a largura calculada seja respeitada com box-sizing */
+    box-sizing: border-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /*-----------------------------------------------------
@@ -347,10 +372,10 @@ bar
     background: var(--g-baseline);
 }
 .bar.critical {
-    background: var(--g-critical);
+    background: var(--g-critico);
 }
 .bar.overdue {
-    background: var(--g-overdue);
+    background: var(--g-atrasado);
 }
 
 .today-line {
@@ -407,10 +432,10 @@ modal
     box-shadow: inset 0 -2px 0 var(--g-primary);
 }
 .status-critical {
-    color: var(--g-critical);
+    color: var(--g-critico);
 }
 .status-overdue {
-    color: var(--g-overdue);
+    color: var(--g-atrasado);
 }
 
 /*-----------------------------------------------------
