@@ -251,24 +251,40 @@
         }
 
         function acoesHtml(t) {
+            const btnAddHtml = t.group ? `
+                <li>
+                    <button type="button" class="dropdown-item" data-btn="addSubTarefa" data-id="${t.id}">
+                        <small class="d-flex align-items-center gap-2">
+                            <i class="bi bi-plus-lg text-primary"></i> Adicionar subtarefa
+                        </small>
+                    </button>
+                </li>
+            ` : "";
+
             return `
-                <div class="btn-group btn-group-sm" role="group">
-                    <button type="button"
-                            class="btn btn-link text-primary p-0 me-2"
-                            data-btn="addSubTarefa"
-                            data-id="${t.id}"
-                            data-bs-toggle="tooltip"
-                            data-bs-title="Adicionar subtarefa">
-                        <i class="bi bi-plus-lg fs-6"></i>
+                <div class="dropdown text-center">
+                    <button
+                        class="btn btn-link text-secondary p-0 border-0"
+                        type="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                        data-bs-title="Ações"
+                        data-bs-toggle-tooltip="tooltip"
+                    >
+
+                        <i class="bi bi-three-dots-vertical fs-6"></i>
                     </button>
-                    <button type="button"
-                            class="btn btn-link text-danger p-0"
-                            data-btn="delSubTarefa"
-                            data-id="${t.id}"
-                            data-bs-toggle="tooltip"
-                            data-bs-title="Excluir">
-                        <i class="bi bi-trash fs-6"></i>
-                    </button>
+
+                    <ul class="dropdown-menu dropdown-menu-start shadow-sm p-0 overflow-hidden">
+                        ${btnAddHtml}
+                        <li>
+                            <button type="button" class="dropdown-item text-danger" data-btn="delSubTarefa" data-id="${t.id}">
+                                <small class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-trash"></i> Excluir
+                                </small>
+                            </button>
+                        </li>
+                    </ul>
                 </div>
             `;
         }
@@ -595,11 +611,17 @@
         });
 
 
-        // ADICIONAR SUBTAREFA / LINHA
+        // ADICIONAR SUBTAREFA (Apenas nos Títulos de Grupo)
         $(document).on("click", '[data-btn="addSubTarefa"]', function () {
             const id = Number($(this).data("id"));
             const indexPai = estado.tasks.findIndex((t) => t.id === id);
             if (indexPai === -1) return;
+
+            // Procura o fim do grupo atual (próximo item com group: true ou fim da lista)
+            let indexInserção = indexPai + 1;
+            while (indexInserção < estado.tasks.length && !estado.tasks[indexInserção].group) {
+                indexInserção++;
+            }
 
             proximoId++;
             const novaSubtarefa = {
@@ -615,8 +637,8 @@
                 group: false
             };
 
-            // Insere logo abaixo do item clicado
-            estado.tasks.splice(indexPai + 1, 0, novaSubtarefa);
+            // Insere no final do grupo correspondente
+            estado.tasks.splice(indexInserção, 0, novaSubtarefa);
             renderizar();
         });
 
