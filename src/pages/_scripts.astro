@@ -609,11 +609,11 @@
             atualizarVisibilidadeColunas();
         });
 
-        $("#btnAdd").on("click", function () {
+        $(document).on("click", '[data-btn="addAtividade"]', function () {
             proximoId++;
             const novaTarefa = {
                 id: proximoId,
-                no: "",
+                no: "", // Será preenchido automaticamente por reordenarNumeracao()
                 name: "Nova Atividade",
                 owner: "",
                 planned: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
@@ -621,11 +621,16 @@
                 real: ["", ""],
                 pred: "",
                 progress: 0,
+                group: true // Define explicitamente como Grupo / Atividade Principal
             };
+
             estado.tasks.push(novaTarefa);
+
+            // Recalcula o 'no' (1, 2, 3...) de todas as atividades e subtarefas
+            reordenarNumeracao();
+
             renderizar();
         });
-
 
         // ADICIONAR SUBTAREFA (Apenas nos Títulos de Grupo)
         $(document).on("click", '[data-btn="addSubTarefa"]', function () {
