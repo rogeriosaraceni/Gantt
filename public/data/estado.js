@@ -25,7 +25,6 @@ const estado = {
             progress: 100,
         },
 
-
         //Implementação Módulo Financeiro
         {
             id: 3,
@@ -76,7 +75,6 @@ const estado = {
             pred: "2.1",
             progress: 0,
         },
-
 
         //Go-Live e Sustentação
         {

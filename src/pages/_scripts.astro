@@ -29,6 +29,13 @@
             return `${ano}-${mes}-${dia}`;
         }
 
+        function formatarDataBR(textoISO) {
+            if (!textoISO) return "";
+            const [ano, mes, dia] = textoISO.split("-");
+            if (!ano || !mes || !dia) return textoISO;
+            return `${dia}/${mes}/${ano}`;
+        }
+
         function adicionarDias(dataInicial, dias) {
             const res = new Date(dataInicial);
             res.setDate(res.getDate() + dias);
@@ -185,9 +192,9 @@
             const datas = tarefa[tipo] || ["", ""];
             return `
                 <div class="date-range">
-                    <input type="date" class="form-control form-control-sm date-input" data-field="${tipo}" data-index="0" value="${datas[0] || ""}">
+                    <input type="date" name="${tipo}" class="form-control form-control-sm date-input" data-field="${tipo}" data-index="0" value="${datas[0] || ""}">
                     <span>—</span>
-                    <input type="date" class="form-control form-control-sm date-input" data-field="${tipo}" data-index="1" value="${datas[1] || ""}">
+                    <input type="date" name="${tipo}" class="form-control form-control-sm date-input" data-field="${tipo}" data-index="1" value="${datas[1] || ""}">
                 </div>
             `;
         }
@@ -217,13 +224,13 @@
                         <td class="text-center text-secondary">${escaparHtml(tarefa.no)}</td>
                         <td class="activity-cell">
                             <div class="d-flex align-items-center gap-1">
-                                <input class="activity-input" data-field="name" value="${escaparHtml(tarefa.name)}" ${isGroup ? 'style="font-weight:600"' : ""}>
+                                <input name="atividade" class="activity-input" data-field="name" value="${escaparHtml(tarefa.name)}" ${isGroup ? 'style="font-weight:600"' : ""}>
                                 ${tarefa.critical ? '<i class="bi bi-exclamation-triangle-fill status-critical" data-bs-toggle="tooltip" data-bs-title="Crítico"></i>' : ""}
-                                ${emAtraso ? '<i class="bi bi-fire status-overdue"  data-bs-toggle="tooltip" data-bs-title="Atrasado"></i>' : ""}
+                                ${emAtraso ? '<i class="bi bi-fire status-overdue" data-bs-toggle="tooltip" data-bs-title="Atrasado"></i>' : ""}
                             </div>
                         </td>
                         <td class="col-owner">
-                            ${isGroup ? "<span>—</span>" : `<select class="owner-select" data-field="owner">${opcoesResponsavel(tarefa.owner)}</select>`}
+                            ${isGroup ? "<span>—</span>" : `<select name="responsavel" class="owner-select" data-field="owner">${opcoesResponsavel(tarefa.owner)}</select>`}
                         </td>
                         <td class="col-planned">
                             ${isGroup ? "<span>—</span>" : htmlIntervaloData(tarefa, "planned")}
@@ -232,10 +239,10 @@
                             ${isGroup ? "<span>—</span>" : htmlIntervaloData(tarefa, "real")}
                         </td>
                         <td class="col-predecessors">
-                            ${isGroup ? "<span>—</span>" : `<select class="pred-select" data-field="pred">${opcoesPredecessora(tarefa.pred)}</select>`}
+                            ${isGroup ? "<span>—</span>" : `<select name="predecessoras" class="pred-select" data-field="pred">${opcoesPredecessora(tarefa.pred)}</select>`}
                         </td>
                         <td class="col-progress">
-                            ${isGroup ? "<span>—</span>" : `<input type="number" min="0" max="100" class="progress-input" data-field="progress" value="${tarefa.progress ?? 0}">`}
+                            ${isGroup ? "<span>—</span>" : `<input type="number" name="percentual" min="0" max="100" class="progress-input" data-field="progress" value="${tarefa.progress ?? 0}">`}
                         </td>
                         <td class="text-center">
                             <button class="delete-btn btn-del" data-id="${tarefa.id}"><i class="bi bi-trash"></i></button>
@@ -273,12 +280,15 @@
                 if (baselineDates && baselineDates[0] && baselineDates[1]) {
                     const leftBase = posicaoParaData(baselineDates[0]);
                     const widthBase = larguraParaIntervalo(baselineDates[0], baselineDates[1]);
+                    const dtInicioBR = formatarDataBR(baselineDates[0]);
+                    const dtFimBR = formatarDataBR(baselineDates[1]);
+
                     $row.append(`
                         <div
                             class="bar baseline-bar"
                             style="left:${leftBase}px; width:${widthBase}px;"
                             data-bs-toggle="tooltip"
-                            data-bs-title="Linha de Base: ${baselineDates[0]} a ${baselineDates[1]}"
+                            data-bs-title="Linha de Base: ${dtInicioBR} a ${dtFimBR}"
                         ></div>
                     `);
                 }
@@ -305,13 +315,15 @@
                     const pct = Math.min(100, Math.max(0, tarefa.progress ?? 0));
                     const fillHtml = !tarefa.group ? `<div class="progress-fill" style="width:${pct}%;"></div>` : "";
 
+                    const dtInicioBR = formatarDataBR(dataInicioBarra);
+                    const dtFimBR = formatarDataBR(dataFimBarra);
+
                     $row.append(`
                         <div
                             class="${barClass}"
-                            style="left:${left}px;
-                            width:${width}px;"
+                            style="left:${left}px; width:${width}px;"
                             data-bs-toggle="tooltip"
-                            data-bs-title="${tarefa.name} (${pct}%)"
+                            data-bs-title="${escaparHtml(tarefa.name)} (${pct}%) - ${dtInicioBR} a ${dtFimBR}"
                         >
                             ${fillHtml}
                         </div>
@@ -325,6 +337,7 @@
         function renderizar() {
             renderizarEsquerda();
             renderizarDireita();
+            inicializarTooltips();
         }
 
         function atualizarVisibilidadeColunas() {
