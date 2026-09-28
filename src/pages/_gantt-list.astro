@@ -1,0 +1,62 @@
+<style>
+.left-table {
+    width: max-content;
+    min-width: 760px;
+}
+
+.left-table .col-actions      { width: 60px; }
+.left-table .col-num          { width: 50px; }
+.left-table .col-activity     { width: 230px;}
+.left-table .col-owner        { width: 130px;}
+.left-table .col-planned      { width: 205px;}
+.left-table .col-real         { width: 205px;}
+.left-table .col-predecessors { width: 120px;}
+.left-table .col-progress     { width: 60px; }
+</style>
+
+<div class="gantt-shell">
+    <div class="gantt-layout">
+        <!-- ESQUERDA: BLOCO CONGELADO -->
+        <div class="gantt-left">
+            <div class="gantt-left-scroll" id="leftScroll">
+                <table class="gantt-table left-table">
+                    <colgroup>
+                        <col class="col-actions" />
+                        <col class="col-num" />
+                        <col class="col-activity" />
+                        <col class="col-owner" />
+                        <col class="col-planned" />
+                        <col class="col-real" />
+                        <col class="col-predecessors" />
+                        <col class="col-progress" />
+                    </colgroup>
+
+                    <thead>
+                        <tr>
+                            <th class="col-actions">Ações</th>
+                            <th class="col-num">#</th>
+                            <th class="col-activity">Atividade</th>
+                            <th class="col-owner">Responsável</th>
+                            <th class="col-planned">Planejado</th>
+                            <th class="col-real">Real</th>
+                            <th class="col-predecessors">Predecessoras</th>
+                            <th class="col-progress">%</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="leftBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- DIREITA: TIMELINE -->
+        <div class="gantt-right">
+            <div class="gantt-right-scroll" id="rightScroll">
+                <div class="timeline" id="timelineContainer">
+                    <div class="timeline-header" id="timelineHeader"></div>
+                    <div id="timelineBody"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

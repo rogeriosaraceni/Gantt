@@ -306,11 +306,6 @@
             `;
         }
 
-
-
-
-
-
         function renderizarEsquerda() {
             const $body =$("#leftBody").empty();
 
@@ -327,7 +322,7 @@
                         <td class="text-center text-secondary align-middle">${escaparHtml(tarefa.no)}</td>
                         <td class="activity-cell align-middle">
                             <div class="d-flex align-items-center gap-1">
-                                <input type="text" name="atividade" class="activity-input" data-field="name" value="${escaparHtml(tarefa.name)}" ${isGroup ? 'style="font-weight:600"' : ""}>
+                                <input type="text" name="atividade" class="activity-input" data-field="name" data-id="${tarefa.id}" value="${escaparHtml(tarefa.name)}" ${isGroup ? 'style="font-weight:600"' : ""}>
                                 ${tarefa.critical ? '<i class="bi bi-exclamation-triangle-fill status-critical" data-bs-toggle="tooltip" data-bs-title="Crítico"></i>' : ""}
                                 ${emAtraso ? '<i class="bi bi-fire status-overdue" data-bs-toggle="tooltip" data-bs-title="Atrasado"></i>' : ""}
                             </div>
@@ -549,7 +544,7 @@
             estado.baselines = [];
         }
 
-        $("#btnSaveBaseline").on("click", function () {
+        $('[data-gantt-btn="saveBeseline"]').on("click", function () {
             estado.tasks.forEach((t) => {
                 t.baseline = [...(t.planned || ["", ""])];
             });
@@ -585,7 +580,7 @@
             modal.show();
         });
 
-        $("#btnCompare").on("click", function () {
+        $('[data-gantt-btn="compare"]').on("click", function () {
             if (!estado.baselines || estado.baselines.length === 0) {
                 alert("Nenhuma linha de base foi salva ainda.");
                 return;
@@ -615,16 +610,15 @@
             atualizarVisibilidadeColunas();
         });
 
-
         // Rola 300px para a esquerda
-        $("#btnPrev").on("click", function () {
+        $('[data-gantt-btn="prev"]').on("click", function () {
             const $container = $("#rightScroll");
             $container.animate({
                 scrollLeft: $container.scrollLeft() - 300
             }, 200);
         });
         // Rola 300px para a direita
-        $("#btnNext").on("click", function () {
+        $('[data-gantt-btn="next"]').on("click", function () {
             const $container = $("#rightScroll");
             $container.animate({
                 scrollLeft: $container.scrollLeft() + 300
@@ -637,17 +631,17 @@
             const maxScroll = $container[0].scrollWidth - $container.outerWidth();
 
             // Desativa 'prev' se estiver no início
-            $("#btnPrev").prop("disabled", scrollLeft <= 0);
+            $('[data-gantt-btn="prev"]').prop("disabled", scrollLeft <= 0);
 
             // Desativa 'next' se atingir o fim
-            $("#btnNext").prop("disabled", scrollLeft >= maxScroll - 1);
+            $('[data-gantt-btn="next"]').prop("disabled", scrollLeft >= maxScroll - 1);
         });
 
-        $(document).on("click", '[data-btn="addAtividade"]', function () {
+        $(document).on("click", '[data-gantt-btn="addAtividade"]', function () {
             proximoId++;
             const novaTarefa = {
                 id: proximoId,
-                no: "", // Será preenchido automaticamente por reordenarNumeracao()
+                no: "",
                 name: "Nova Atividade",
                 owner: "",
                 planned: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
@@ -655,15 +649,26 @@
                 real: ["", ""],
                 pred: "",
                 progress: 0,
-                group: true // Define explicitamente como Grupo / Atividade Principal
+                group: true,
             };
 
             estado.tasks.push(novaTarefa);
 
-            // Recalcula o 'no' (1, 2, 3...) de todas as atividades e subtarefas
             reordenarNumeracao();
-
             renderizar();
+
+            // Procura o input do nome da nova tarefa recém-renderizada pelo ID ou atributo data
+            const $novoInput =$(`input[data-id="${proximoId}"][data-field="name"]`); // Ajuste o seletor para o seu input de nome
+
+            if ($novoInput.length) {
+                // 1. Rola o container/janela de forma suave até o novo input
+                $novoInput[0].scrollIntoView({ behavior: "smooth", block: "center" });
+
+                // 2. Coloca o foco no input e seleciona o texto "Nova Atividade" para facilitar a edição rápida
+                setTimeout(() => {
+                    $novoInput.trigger("focus").select();
+                }, 150); // O pequeno timeout garante o alinhamento com a rolagem
+            }
         });
 
         // ADICIONAR SUBTAREFA (Apenas nos Títulos de Grupo)
