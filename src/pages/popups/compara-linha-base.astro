@@ -3,42 +3,42 @@ import Layout from "../../layouts/Layout.astro";
 ---
 
 <style>
-    body {
-        background-color: #f8f9fa;
-    }
+    body { background-color: #f8f9fa; }
     .text-desvio-atrasado { color: #dc3545; font-weight: 600; }
     .text-desvio-adiantado { color: #0d6efd; font-weight: 600; }
     .text-desvio-noprazo { color: #198754; font-weight: 600; }
 
     @media print {
-        .no-print {
-            display: none !important;
-        }
-        body {
-            background-color: #ffffff !important;
-        }
+        .no-print { display: none !important; }
+        body { background-color: #ffffff !important; }
         .card-print {
             border: none !important;
             box-shadow: none !important;
             padding: 0 !important;
+            max-width: 100% !important;
         }
     }
 </style>
 
 <Layout>
-    <!-- Bar de Ações (Oculta na impressão) -->
+    <!-- Barra Superior de Controle (Oculta ao imprimir) -->
     <div class="bg-dark text-white p-3 d-flex justify-content-between align-items-center no-print">
-        <span class="fw-semibold">Comparação com a Linha de Base</span>
+        <div class="d-flex align-items-center gap-2">
+            <label for="selectBaseline" class="form-label mb-0 small fw-semibold text-nowrap">Linha de Base:</label>
+            <select id="selectBaseline" class="form-select form-select-sm bg-secondary text-white border-0" style="min-width: 220px;">
+                <!-- Preenchido via JavaScript -->
+            </select>
+        </div>
         <button type="button" class="btn btn-danger btn-sm px-3" onclick="window.print()">
             <i class="bi bi-printer me-1"></i> Imprimir / Salvar PDF
         </button>
     </div>
 
-    <!-- Conteúdo do Relatório -->
+    <!-- Relatório -->
     <div class="container my-4">
         <div class="bg-white p-4 rounded-3 shadow-sm card-print mx-auto" style="max-width: 900px;">
-            <h4 class="fw-bold mb-1" id="compareProjectTitle">Migração Infraestrutura Cloud</h4>
-            <p class="text-muted small mb-3" id="compareBaselineSub">Carregando dados...</p>
+            <h4 class="fw-bold mb-1" id="compareProjectTitle">Comparativo de Linha de Base</h4>
+            <p class="text-muted small mb-3" id="compareBaselineSub">Comparação com a Linha de base</p>
 
             <div id="compareImpactBanner" class="alert alert-success border-0 py-2 px-3 mb-3 fw-semibold">
                 Impacto no prazo final do projeto: sem alteração
@@ -56,12 +56,12 @@ import Layout from "../../layouts/Layout.astro";
                         <tr>
                             <th>Atividade</th>
                             <th class="text-center" id="thBaselineLabel">Linha de base</th>
-                            <th class="text-center">Atual</th>
+                            <th class="text-center">Atual / Real</th>
                             <th class="text-end">Desvio</th>
                         </tr>
                     </thead>
                     <tbody id="tbodyCompareTasks">
-                        <!-- Preenchido via Script -->
+                        <!-- Linhas da tabela inseridas via Script -->
                     </tbody>
                 </table>
             </div>
@@ -70,33 +70,170 @@ import Layout from "../../layouts/Layout.astro";
 </Layout>
 
 <script is:inline>
-    // Pega os dados passados pela janela principal
-    $(document).ready(function() {
-        if (window.parent && window.parent.dadosComparacaoGantt) {
-            const dados = window.parent.dadosComparacaoGantt;
+    function analisarData(texto) {
+        if (!texto) return null;
+        if (texto instanceof Date) return texto;
+        const partes = String(texto).split("-").map(Number);
+        if (partes.length < 3) return null;
+        return new Date(partes[0], partes[1] - 1, partes[2]);
+    }
 
-            $("#compareBaselineSub").text(dados.subtitulo);
-            $("#thBaselineLabel").text(dados.labelBaseline);
-            $("#cntAtrasadas").text(dados.atrasadas);
-            $("#cntAdiantadas").text(dados.adiantadas);
-            $("#cntNoPrazo").text(dados.noPrazo);
+    function formatarDataBR(textoISO) {
+        if (!textoISO) return "";
+        if (textoISO instanceof Date) {
+            const d = String(textoISO.getDate()).padStart(2, '0');
+            const m = String(textoISO.getMonth() + 1).padStart(2, '0');
+            const a = textoISO.getFullYear();
+            return `${d}/${m}/${a}`;
+        }
+        const partes = String(textoISO).split("-");
+        if (partes.length < 3) return textoISO;
+        return `${partes[2]}/${partes[1]}/${partes[0]}`;
+    }
 
-            // Preenche o banner
-            const $banner =$("#compareImpactBanner");
-            $banner.removeClass("alert-success alert-danger alert-info").addClass(dados.bannerClasse).text(dados.bannerTexto);
+    function diferencaDias(dataInicial, dataFinal) {
+        if (!dataInicial || !dataFinal) return 0;
+        return Math.round((dataFinal - dataInicial) / 86400000);
+    }
 
-            // Preenche a tabela
+    function escaparHtml(valor) {
+        return String(valor ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+    }
+
+    $(document).ready(function () {
+        const dadosPai = window.parent?.dadosComparacaoGantt || window.dadosComparacaoGantt;
+
+        if (!dadosPai) {
+            console.warn("Nenhum dado de comparação foi fornecido via window.dadosComparacaoGantt");
+            return;
+        }
+
+        // Define o Título do Projeto
+        if (dadosPai.titulo) {
+            $("#compareProjectTitle").text(dadosPai.titulo);
+        }
+
+        // Garante que baselines seja uma lista contendo todas as versões salvas
+        let baselines = [];
+        if (Array.isArray(dadosPai.baselines) && dadosPai.baselines.length > 0) {
+            baselines = dadosPai.baselines;
+        } else {
+            // Fallback para caso venha um objeto simples com apenas 1 linha de base
+            baselines = [{
+                versao: dadosPai.versao || "0",
+                data: dadosPai.dataSalva || new Date().toLocaleDateString('pt-BR'),
+                tasks: dadosPai.tasks || dadosPai.linhas || []
+            }];
+        }
+
+        // 1. Popula o Select no padrão: "Linha de base X — DD/MM/AAAA"
+        const $select =$("#selectBaseline").empty();
+        baselines.forEach((b, index) => {
+            const numVersao = b.versao !== undefined ? b.versao : index;
+            const dataStr = b.data ? ` — ${b.data}` : "";
+            const optionText = `Linha de base ${numVersao}${dataStr}`;
+
+            $select.append(`<option value="${index}">${escaparHtml(optionText)}</option>`);
+        });
+
+        // Seleciona por padrão a versão mais recente
+        const ultimoIndice = baselines.length - 1;
+        $select.val(ultimoIndice);
+
+        // 2. Renderiza o Relatório
+        function renderizarRelatorio(idxVersao) {
+            const baselineInfo = baselines[idxVersao];
+            if (!baselineInfo) return;
+
+            const listaTarefas = baselineInfo.tasks || [];
+            const numVersao = baselineInfo.versao !== undefined ? baselineInfo.versao : idxVersao;
+            const dataStr = baselineInfo.data ? ` — salva em ${baselineInfo.data}` : "";
+
+            // Corrige o acúmulo de texto no Subtítulo
+            $("#compareBaselineSub").text(`Comparação com a Linha de Base ${numVersao}${dataStr}`);
+            $("#thBaselineLabel").text(`Linha de base ${numVersao}`);
+
+            let totalAtrasadas = 0, totalAdiantadas = 0, totalNoPrazo = 0, maiorAtrasoFim = 0;
             const $tbody =$("#tbodyCompareTasks").empty();
-            dados.linhas.forEach(l => {
+
+            listaTarefas.forEach((tarefa) => {
+                if (tarefa.group) return;
+
+                const dtBaseIni = tarefa.baseRange?.[0] || tarefa.baseline?.[0] || tarefa.planned?.[0] || tarefa.dtBaseIni || "";
+                const dtBaseFim = tarefa.baseRange?.[1] || tarefa.baseline?.[1] || tarefa.planned?.[1] || tarefa.dtBaseFim || "";
+                const dtAtualIni = tarefa.atualRange?.[0] || tarefa.real?.[0] || tarefa.dtAtualIni || dtBaseIni;
+                const dtAtualFim = tarefa.atualRange?.[1] || tarefa.real?.[1] || tarefa.dtAtualFim || dtBaseFim;
+
+                let desvioTexto = "No prazo";
+                let classeDesvio = "text-desvio-noprazo";
+
+                if (dtBaseFim && dtAtualFim) {
+                    const diffDias = diferencaDias(analisarData(dtBaseFim), analisarData(dtAtualFim));
+                    if (diffDias > 0) {
+                        desvioTexto = `+${diffDias} dia(s)`;
+                        classeDesvio = "text-desvio-atrasado";
+                        totalAtrasadas++;
+                        if (diffDias > maiorAtrasoFim) maiorAtrasoFim = diffDias;
+                    } else if (diffDias < 0) {
+                        desvioTexto = `${diffDias} dia(s)`;
+                        classeDesvio = "text-desvio-adiantado";
+                        totalAdiantadas++;
+                    } else {
+                        totalNoPrazo++;
+                    }
+                } else {
+                    totalNoPrazo++;
+                }
+
+                const baseRangeStr = (dtBaseIni && dtBaseFim)
+                    ? `${formatarDataBR(dtBaseIni)} — ${formatarDataBR(dtBaseFim)}`
+                    : (tarefa.baseRange || "—");
+
+                const atualRangeStr = (dtAtualIni && dtAtualFim)
+                    ? `${formatarDataBR(dtAtualIni)} — ${formatarDataBR(dtAtualFim)}`
+                    : (tarefa.atualRange || "—");
+
+                const nomeTarefa = tarefa.nome || `${tarefa.no ? tarefa.no + ' ' : ''}${tarefa.name || ''}`;
+
                 $tbody.append(`
                     <tr>
-                        <td class="fw-medium">${l.nome}</td>
-                        <td class="text-center text-muted">${l.baseRange}</td>
-                        <td class="text-center">${l.atualRange}</td>
-                        <td class="text-end ${l.classeDesvio}">${l.textoDesvio}</td>
+                        <td class="fw-medium">${escaparHtml(nomeTarefa)}</td>
+                        <td class="text-center text-muted">${escaparHtml(baseRangeStr)}</td>
+                        <td class="text-center">${escaparHtml(atualRangeStr)}</td>
+                        <td class="text-end ${classeDesvio}">${escaparHtml(tarefa.textoDesvio || desvioTexto)}</td>
                     </tr>
                 `);
             });
+
+            // Atualiza Contadores
+            $("#cntAtrasadas").text(totalAtrasadas);
+            $("#cntAdiantadas").text(totalAdiantadas);
+            $("#cntNoPrazo").text(totalNoPrazo);
+
+            // Atualiza Banner de Impacto
+            const $banner =$("#compareImpactBanner");
+            if (maiorAtrasoFim > 0) {
+                $banner.removeClass("alert-success alert-info").addClass("alert-danger")
+                       .text(`Impacto no prazo final do projeto: atraso de ${maiorAtrasoFim} dia(s)`);
+            } else if (totalAdiantadas > 0 && totalAtrasadas === 0) {
+                $banner.removeClass("alert-success alert-danger").addClass("alert-info")
+                       .text(`Impacto no prazo final do projeto: adiantado em relação à linha de base`);
+            } else {
+                $banner.removeClass("alert-danger alert-info").addClass("alert-success")
+                       .text(`Impacto no prazo final do projeto: sem alteração`);
+            }
         }
+
+        // Listener para Troca de Linha de Base no Select
+        $select.on("change", function () {
+            renderizarRelatorio(Number($(this).val()));
+        });
+
+        // Renderização Inicial
+        renderizarRelatorio(ultimoIndice);
     });
 </script>
