@@ -251,20 +251,19 @@
         }
 
         function acoesHtml(t) {
-            const btnAddClass = t.group ? "btn-add-sub" : "btn-add-after";
-            const btnAddTitle = t.group ? "Adicionar subtarefa" : "Adicionar linha abaixo";
-
             return `
                 <div class="btn-group btn-group-sm" role="group">
                     <button type="button"
-                            class="btn btn-link text-primary p-0 me-2 ${btnAddClass}"
+                            class="btn btn-link text-primary p-0 me-2"
+                            data-btn="addSubTarefa"
                             data-id="${t.id}"
                             data-bs-toggle="tooltip"
-                            data-bs-title="${btnAddTitle}">
+                            data-bs-title="Adicionar subtarefa">
                         <i class="bi bi-plus-lg fs-6"></i>
                     </button>
                     <button type="button"
-                            class="btn btn-link text-danger p-0 btn-del"
+                            class="btn btn-link text-danger p-0"
+                            data-btn="delSubTarefa"
                             data-id="${t.id}"
                             data-bs-toggle="tooltip"
                             data-bs-title="Excluir">
@@ -396,15 +395,23 @@
         }
 
         function renderizar() {
-            $('.tooltip').remove();
+            // 1. Destruir as instâncias de tooltips existentes ANTES de apagar os elementos do DOM
+            $('[data-bs-toggle="tooltip"]').tooltip("dispose");
+
+            // 2. Limpar os containers
             $("#leftBody").empty();
             $("#rightBody").empty();
 
+            // 3. Processar regras e renderizar o HTML
             recalcularNumeracao();
             renderizarEsquerda();
             renderizarDireita();
+
+            // 4. Inicializar os novos tooltips
             if (typeof inicializarTooltips === "function") {
                 inicializarTooltips();
+            } else {
+                $('[data-bs-toggle="tooltip"]').tooltip();
             }
         }
 
@@ -570,34 +577,6 @@
             atualizarVisibilidadeColunas();
         });
 
-        $(document).on("click", ".btn-del", function () {
-            const id = Number($(this).data("id"));
-            const task = estado.tasks.find((t) => t.id === id);
-            if (!task) return;
-
-            idParaExcluir = id;
-            $("#deleteActivityName").text(task.name);
-
-            const deleteModalElem = document.getElementById("deleteActivityModal");
-            const modalInstance = bootstrap.Modal.getOrCreateInstance(deleteModalElem);
-            modalInstance.show();
-        });
-
-        $("#btnConfirmDelete").on("click", function () {
-            if (idParaExcluir !== null) {
-                estado.tasks = estado.tasks.filter((t) => t.id !== idParaExcluir);
-                idParaExcluir = null;
-
-                const deleteModalElem = document.getElementById("deleteActivityModal");
-                const modalInstance = bootstrap.Modal.getInstance(deleteModalElem);
-                if (modalInstance) {
-                    modalInstance.hide();
-                }
-
-                renderizar();
-            }
-        });
-
         $("#btnAdd").on("click", function () {
             proximoId++;
             const novaTarefa = {
@@ -615,33 +594,12 @@
             renderizar();
         });
 
-        $(document).on("click", ".btn-add-after", function () {
-            const idAtual = parseInt($(this).data("id"), 10);
-            const indexAtual = estado.tasks.findIndex(t => t.id === idAtual);
-            if (indexAtual === -1) return;
 
-            proximoId++;
-            const novaTarefa = {
-                id: proximoId,
-                no: "",
-                name: "Nova Atividade",
-                owner: "",
-                planned: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
-                baseline: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
-                real: ["", ""],
-                pred: "",
-                progress: 0,
-                group: false
-            };
-
-            estado.tasks.splice(indexAtual + 1, 0, novaTarefa);
-            renderizar();
-        });
-
-        $(document).on("click", ".btn-add-sub", function () {
-            const idGrupo = parseInt($(this).data("id"), 10);
-            const indexGrupo = estado.tasks.findIndex(t => t.id === idGrupo);
-            if (indexGrupo === -1) return;
+        // ADICIONAR SUBTAREFA / LINHA
+        $(document).on("click", '[data-btn="addSubTarefa"]', function () {
+            const id = Number($(this).data("id"));
+            const indexPai = estado.tasks.findIndex((t) => t.id === id);
+            if (indexPai === -1) return;
 
             proximoId++;
             const novaSubtarefa = {
@@ -657,8 +615,39 @@
                 group: false
             };
 
-            estado.tasks.splice(indexGrupo + 1, 0, novaSubtarefa);
+            // Insere logo abaixo do item clicado
+            estado.tasks.splice(indexPai + 1, 0, novaSubtarefa);
             renderizar();
+        });
+
+        // REQUISIÇÃO DE EXCLUSÃO (ABRE O MODAL)
+        $(document).on("click", '[data-btn="delSubTarefa"]', function () {
+            const id = Number($(this).data("id"));
+            const task = estado.tasks.find((t) => t.id === id);
+            if (!task) return;
+
+            idParaExcluir = id;
+            $("#deleteActivityName").text(task.name);
+
+            const deleteModalElem = document.getElementById("deleteActivityModal");
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(deleteModalElem);
+            modalInstance.show();
+        });
+
+
+        $("#btnConfirmDelete").on("click", function () {
+            if (idParaExcluir !== null) {
+                estado.tasks = estado.tasks.filter((t) => t.id !== idParaExcluir);
+                idParaExcluir = null;
+
+                const deleteModalElem = document.getElementById("deleteActivityModal");
+                const modalInstance = bootstrap.Modal.getInstance(deleteModalElem);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+
+                renderizar();
+            }
         });
 
         $("#leftScroll").on("scroll", function () {
