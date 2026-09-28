@@ -25,6 +25,22 @@
             });
         }
 
+        function reordenarNumeracao() {
+            let grupoAtual = 0;
+            let subItemAtual = 0;
+
+            estado.tasks.forEach((t) => {
+                if (t.group) {
+                    grupoAtual++;
+                    subItemAtual = 0;
+                    t.no = `${grupoAtual}`;
+                } else {
+                    subItemAtual++;
+                    t.no = `${grupoAtual}.${subItemAtual}`;
+                }
+            });
+        }
+
         function escaparHtml(valor) {
             return String(valor ?? "")
                 .replace(/&/g, "&amp;")
@@ -649,27 +665,71 @@
             if (!task) return;
 
             idParaExcluir = id;
-            $("#deleteActivityName").text(task.name);
+
+            // Elementos internos do include do modal
+            const $modalTitle = $("#deleteActivityModalLabel");
+            const $iconContainer = $("#deleteActivityModal .delete-modal-icon");
+            const $taskName = $("#deleteActivityName");
+            const $msgText = $("#deleteActivityModal .text-secondary");
+
+            $taskName.text(task.name);
+
+            if (task.group) {
+                // Estilo e mensagem diferenciada para GRUPOS
+                $modalTitle.text("Excluir grupo");
+                $iconContainer.html('<i class="bi bi-exclamation-triangle-fill text-danger fs-1"></i>');
+                $msgText
+                    .removeClass("text-secondary")
+                    .addClass("text-danger fw-semibold")
+                    .text("Atenção: Ao excluir este grupo, TODAS as subtarefas vinculadas a ele também serão excluídas!");
+            } else {
+                // Estilo padrão para SUBTAREFAS
+                $modalTitle.text("Excluir atividade");
+                $iconContainer.html('<i class="bi bi-trash3 fs-1"></i>');
+                $msgText
+                    .removeClass("text-danger fw-semibold")
+                    .addClass("text-secondary")
+                    .text("Tem certeza que deseja excluir esta atividade?");
+            }
 
             const deleteModalElem = document.getElementById("deleteActivityModal");
             const modalInstance = bootstrap.Modal.getOrCreateInstance(deleteModalElem);
             modalInstance.show();
         });
 
-
         $("#btnConfirmDelete").on("click", function () {
-            if (idParaExcluir !== null) {
-                estado.tasks = estado.tasks.filter((t) => t.id !== idParaExcluir);
-                idParaExcluir = null;
+            if (!idParaExcluir) return;
 
-                const deleteModalElem = document.getElementById("deleteActivityModal");
-                const modalInstance = bootstrap.Modal.getInstance(deleteModalElem);
-                if (modalInstance) {
-                    modalInstance.hide();
+            const index = estado.tasks.findIndex((t) => t.id === idParaExcluir);
+            if (index === -1) return;
+
+            const task = estado.tasks[index];
+
+            if (task.group) {
+                // Remove o grupo e todas as subtarefas filhas sequenciais
+                let qtdParaRemover = 1;
+                while (
+                    index + qtdParaRemover < estado.tasks.length &&
+                    !estado.tasks[index + qtdParaRemover].group
+                ) {
+                    qtdParaRemover++;
                 }
-
-                renderizar();
+                estado.tasks.splice(index, qtdParaRemover);
+            } else {
+                // Remove apenas a subtarefa
+                estado.tasks.splice(index, 1);
             }
+
+            // Recalcula o 'no' (1, 1.1, 1.2, 2...)
+            reordenarNumeracao();
+
+            // Fecha o modal
+            const deleteModalElem = document.getElementById("deleteActivityModal");
+            const modalInstance = bootstrap.Modal.getInstance(deleteModalElem);
+            if (modalInstance) modalInstance.hide();
+
+            idParaExcluir = null;
+            renderizar();
         });
 
         $("#leftScroll").on("scroll", function () {
