@@ -229,6 +229,30 @@
             return false;
         }
 
+        function acoesHtml(t) {
+            const btnAddClass = t.group ? "btn-add-sub" : "btn-add-after";
+            const btnAddTitle = t.group ? "Adicionar subtarefa" : "Adicionar linha abaixo";
+
+            return `
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button"
+                            class="btn btn-link text-primary p-0 me-2 ${btnAddClass}"
+                            data-id="${t.id}"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="${btnAddTitle}">
+                        <i class="bi bi-plus-lg fs-6"></i>
+                    </button>
+                    <button type="button"
+                            class="btn btn-link text-danger p-0 btn-del"
+                            data-id="${t.id}"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="Excluir">
+                        <i class="bi bi-trash fs-6"></i>
+                    </button>
+                </div>
+            `;
+        }
+
         function renderizarEsquerda() {
             const $body =$("#leftBody").empty();
 
@@ -239,31 +263,31 @@
 
                 $body.append(`
                     <tr class="${classeLinha}" data-id="${tarefa.id}">
-                        <td class="text-center text-secondary">${escaparHtml(tarefa.no)}</td>
-                        <td class="activity-cell">
+                        <td class="text-center align-middle" style="width: 60px;">
+                            ${acoesHtml(tarefa)}
+                        </td>
+                        <td class="text-center text-secondary align-middle">${escaparHtml(tarefa.no)}</td>
+                        <td class="activity-cell align-middle">
                             <div class="d-flex align-items-center gap-1">
-                                <input name="atividade" class="activity-input" data-field="name" value="${escaparHtml(tarefa.name)}" ${isGroup ? 'style="font-weight:600"' : ""}>
+                                <input type="text" name="atividade" class="activity-input" data-field="name" value="${escaparHtml(tarefa.name)}" ${isGroup ? 'style="font-weight:600"' : ""}>
                                 ${tarefa.critical ? '<i class="bi bi-exclamation-triangle-fill status-critical" data-bs-toggle="tooltip" data-bs-title="Crítico"></i>' : ""}
                                 ${emAtraso ? '<i class="bi bi-fire status-overdue" data-bs-toggle="tooltip" data-bs-title="Atrasado"></i>' : ""}
                             </div>
                         </td>
-                        <td class="col-owner">
+                        <td class="col-owner align-middle">
                             ${isGroup ? "<span>—</span>" : `<select name="responsavel" class="owner-select" data-field="owner">${opcoesResponsavel(tarefa.owner)}</select>`}
                         </td>
-                        <td class="col-planned">
+                        <td class="col-planned align-middle">
                             ${isGroup ? "<span>—</span>" : htmlIntervaloData(tarefa, "planned")}
                         </td>
-                        <td class="col-real">
+                        <td class="col-real align-middle">
                             ${isGroup ? "<span>—</span>" : htmlIntervaloData(tarefa, "real")}
                         </td>
-                        <td class="col-predecessors">
+                        <td class="col-predecessors align-middle">
                             ${isGroup ? "<span>—</span>" : `<select name="predecessoras" class="pred-select" data-field="pred">${opcoesPredecessora(tarefa.pred)}</select>`}
                         </td>
-                        <td class="col-progress">
+                        <td class="col-progress align-middle">
                             ${isGroup ? "<span>—</span>" : `<input type="number" name="percentual" min="0" max="100" class="progress-input" data-field="progress" value="${tarefa.progress ?? 0}">`}
-                        </td>
-                        <td class="text-center">
-                            <button class="delete-btn btn-del" data-id="${tarefa.id}"><i class="bi bi-trash"></i></button>
                         </td>
                     </tr>
                 `);
@@ -293,7 +317,6 @@
                     $row.append(`<div class="today-line" style="left:${posHoje}px;"></div>`);
                 }
 
-                // Linha Base
                 const baselineDates = compararLinhaBase ? (tarefa.baseline || tarefa.planned) : tarefa.planned;
                 if (baselineDates && baselineDates[0] && baselineDates[1]) {
                     const leftBase = posicaoParaData(baselineDates[0]);
@@ -311,7 +334,6 @@
                     `);
                 }
 
-                // Barra Principal
                 const usaReal = Boolean(tarefa.real && tarefa.real[0]);
                 const dataInicioBarra = usaReal ? tarefa.real[0] : tarefa.planned?.[0];
 
@@ -353,10 +375,16 @@
         }
 
         function renderizar() {
+            $('.tooltip').remove();
+            $("#leftBody").empty();
+            $("#rightBody").empty();
+
             recalcularNumeracao();
             renderizarEsquerda();
             renderizarDireita();
-            inicializarTooltips();
+            if (typeof inicializarTooltips === "function") {
+                inicializarTooltips();
+            }
         }
 
         function atualizarVisibilidadeColunas() {
@@ -368,8 +396,25 @@
         }
 
         // EVENTOS
-        $(document).on("change input", ".activity-input, .owner-select, .pred-select, .progress-input, .date-input", function () {
-            const $row =$(this).closest("tr");
+        // 1. Atualização em tempo real do objeto 'estado' sem re-renderizar a árvore DOM (preserva o foco/digitação)
+        $(document).on("input", ".activity-input, .progress-input", function () {
+            const $row = $(this).closest("tr");
+            const id = Number($row.data("id"));
+            const task = estado.tasks.find((t) => t.id === id);
+            if (!task) return;
+
+            const field = $(this).data("field");
+
+            if (field === "progress") {
+                task.progress = Number($(this).val());
+            } else {
+                task[field] = $(this).val();
+            }
+        });
+
+        // 2. Dispara a re-renderização do Gantt/Grid somente ao confirmar a alteração (blur, enter, change de select/date)
+        $(document).on("change", ".activity-input, .owner-select, .pred-select, .progress-input, .date-input", function () {
+            const $row = $(this).closest("tr");
             const id = Number($row.data("id"));
             const task = estado.tasks.find((t) => t.id === id);
             if (!task) return;
@@ -396,18 +441,15 @@
             renderizar();
         });
 
-        // Garante que o array de histórico exista no seu estado
         if (!estado.baselines) {
             estado.baselines = [];
         }
 
         $("#btnSaveBaseline").on("click", function () {
-            // 1. Atualiza os dados de baseline de cada tarefa no estado atual
             estado.tasks.forEach((t) => {
                 t.baseline = [...(t.planned || ["", ""])];
             });
 
-            // 2. Calcula a nova versão e data formatada
             const numeroVersao = estado.baselines.length + 1;
             const dataHoje = new Date().toLocaleDateString("pt-BR", {
                 day: "2-digit",
@@ -415,18 +457,15 @@
                 year: "numeric"
             });
 
-            // 3. Grava o registro salvando o SNAPSHOT exato das tarefas desta versão
             const registro = {
                 versao: numeroVersao,
                 data: dataHoje,
                 texto: `Linha de base ${numeroVersao} salva em ${dataHoje}`,
-                // Faz uma cópia profunda (deep copy) do estado das tarefas para congelar a versão
                 tasks: JSON.parse(JSON.stringify(estado.tasks))
             };
 
             estado.baselines.push(registro);
 
-            // 4. Monta a lista no modal de confirmação
             const $lista =$("#listaBaselines").empty();
             estado.baselines.forEach((b) => {
                 $lista.append(`
@@ -442,23 +481,18 @@
             modal.show();
         });
 
-        // Evento de clique no botão "Comparar linha de base"
         $("#btnCompare").on("click", function () {
             if (!estado.baselines || estado.baselines.length === 0) {
                 alert("Nenhuma linha de base foi salva ainda.");
                 return;
             }
 
-            // Passa os dados estruturados para a janela pai do iframe Magnific Popup
             window.dadosComparacaoGantt = {
                 titulo: estado.titulo || "Sua Estrutura Analítica do Projeto (EAP)",
-                // Passa o array com todas as versões salvas (cada uma contendo suas tarefas congeladas)
                 baselines: estado.baselines,
-                // Passa o estado atual das tarefas para comparação direta
                 tasksAtuais: JSON.parse(JSON.stringify(estado.tasks))
             };
 
-            // Abre o Magnific Popup apontando para o iframe Astro
             $.magnificPopup.open({
                 items: {
                     src: '/popups/compara-linha-base'
@@ -519,6 +553,52 @@
                 progress: 0,
             };
             estado.tasks.push(novaTarefa);
+            renderizar();
+        });
+
+        $(document).on("click", ".btn-add-after", function () {
+            const idAtual = parseInt($(this).data("id"), 10);
+            const indexAtual = estado.tasks.findIndex(t => t.id === idAtual);
+            if (indexAtual === -1) return;
+
+            proximoId++;
+            const novaTarefa = {
+                id: proximoId,
+                no: "",
+                name: "Nova Atividade",
+                owner: "",
+                planned: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
+                baseline: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
+                real: ["", ""],
+                pred: "",
+                progress: 0,
+                group: false
+            };
+
+            estado.tasks.splice(indexAtual + 1, 0, novaTarefa);
+            renderizar();
+        });
+
+        $(document).on("click", ".btn-add-sub", function () {
+            const idGrupo = parseInt($(this).data("id"), 10);
+            const indexGrupo = estado.tasks.findIndex(t => t.id === idGrupo);
+            if (indexGrupo === -1) return;
+
+            proximoId++;
+            const novaSubtarefa = {
+                id: proximoId,
+                no: "",
+                name: "Nova Subtarefa",
+                owner: "",
+                planned: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
+                baseline: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
+                real: ["", ""],
+                pred: "",
+                progress: 0,
+                group: false
+            };
+
+            estado.tasks.splice(indexGrupo + 1, 0, novaSubtarefa);
             renderizar();
         });
 
