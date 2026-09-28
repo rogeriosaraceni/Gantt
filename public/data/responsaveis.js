@@ -1,4 +1,4 @@
-const responsaveis = [
+export const responsaveis = [
     "Ana Paula Silva",
     "Ricardo Alves",
     "Juliana Martins",

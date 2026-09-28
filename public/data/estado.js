@@ -1,4 +1,4 @@
-const estado = {
+export const estado = {
     tasks: [
         // Planejamento e Mobilização
         {
@@ -101,4 +101,5 @@ const estado = {
             progress: 0,
         },
     ],
+    baselines: []
 };
