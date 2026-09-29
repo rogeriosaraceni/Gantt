@@ -26,6 +26,14 @@
         let proximoId = 100;
         let idParaExcluir = null;
         let periodosCache = null;
+        let predAberto = null;
+
+        const buscarTarefa = (id) => estado.tasks.find((t) => t.id === id);
+
+        // Ids das tarefas que dependem de `id` e ainda estão sem início planejado
+        const sucessorasSemInicio = (id) => estado.tasks
+            .filter((s) => s.pred?.includes(id) && !s.planned?.[0])
+            .map((s) => s.id);
 
         function recalcularNumeracao() {
             let contadorGrupo = 0;
@@ -124,6 +132,72 @@
             const dataInicioAno = new Date(Date.UTC(dataUtc.getUTCFullYear(), 0, 1));
             return Math.ceil(((dataUtc - dataInicioAno) / 86400000 + 1) / 7);
         }
+
+        // ---------------------------------------------------------------
+        // DEPENDÊNCIAS E REAGENDAMENTO
+        // ---------------------------------------------------------------
+
+        // true se a tarefa idA depende (direta ou indiretamente) da tarefa idB
+        function dependeDe(idA, idB, vistos = new Set()) {
+            if (vistos.has(idA)) return false;
+            vistos.add(idA);
+            return (buscarTarefa(idA)?.pred || []).some((p) => p === idB || dependeDe(p, idB, vistos));
+        }
+
+        // Ajusta o início planejado para o dia seguinte ao fim da predecessora mais tardia.
+        //  - Tarefas em `ids` (forçadas): o início SEMPRE vira esse dia, esteja vazio,
+        //    antes ou depois. Usado ao escolher a predecessora.
+        //  - Demais tarefas: só são empurradas para frente se começarem antes disso.
+        //    Nunca puxa para trás e nunca preenche início vazio.
+        // Mantém a duração quando início e fim existem. Retorna true se algo mudou.
+        function reagendar(ids = []) {
+            const forcar = new Set(ids);
+            let moveu = false;
+            estado.tasks.forEach((t) => (t.reagendada = false));
+
+            // Sem ciclos, a cadeia converge em no máximo N passadas
+            for (let passo = 0; passo < estado.tasks.length; passo++) {
+                let mudou = false;
+
+                estado.tasks.forEach((t) => {
+                    if (t.group || !t.pred?.length) return;
+
+                    const fimPredecessora = t.pred
+                        .map((id) => buscarTarefa(id)?.planned?.[1])
+                        .filter(Boolean)
+                        .sort()
+                        .pop();
+                    if (!fimPredecessora) return;
+
+                    const [ini, fim] = t.planned || [];
+                    const novoInicio = paraISO(adicionarDias(analisarData(fimPredecessora), 1));
+                    const deveMover = forcar.has(t.id) ? ini !== novoInicio : ini && ini < novoInicio;
+                    if (!deveMover) return;
+
+                    let novoFim = "";
+                    if (ini && fim) {
+                        const duracao = Math.max(0, diferencaDias(analisarData(ini), analisarData(fim)));
+                        novoFim = paraISO(adicionarDias(analisarData(novoInicio), duracao));
+                    } else if (fim && fim >= novoInicio) {
+                        novoFim = fim;
+                    }
+
+                    t.planned = [novoInicio, novoFim];
+                    t.reagendada = mudou = moveu = true;
+
+                    // Quem depende desta tarefa e está sem início passa a receber a data
+                    sucessorasSemInicio(t.id).forEach((id) => forcar.add(id));
+                });
+
+                if (!mudou) break;
+            }
+
+            return moveu;
+        }
+
+        // ---------------------------------------------------------------
+        // TIMELINE
+        // ---------------------------------------------------------------
 
         function intervaloParaEscala() {
             // Intervalo inicial: 6 meses antes e 6 meses depois de hoje
@@ -230,6 +304,10 @@
             return Math.max(6, (dias / cfg.unitDays) * cfg.width);
         }
 
+        // ---------------------------------------------------------------
+        // HTML DAS LINHAS
+        // ---------------------------------------------------------------
+
         function opcoesResponsavel(selecionado) {
             let html = '<option value="">—</option>';
             responsaveis.forEach((resp) => {
@@ -238,14 +316,15 @@
             return html;
         }
 
-        function opcoesPredecessora(numeroSelecionado) {
-            let html = '<option value="">Nenhuma</option>';
-            estado.tasks
-                .filter((t) => !t.group)
-                .forEach((t) => {
-                    html += `<option value="${escaparHtml(t.no)}"${t.no === numeroSelecionado ? " selected" : ""}>${escaparHtml(t.no + " — " + t.name)}</option>`;
-                });
-            return html;
+        // Guarda ids (não o número "1.2"). Não lista a própria tarefa nem quem
+        // já depende dela, para impedir dependência circular.
+        function opcoesPredecessora(tarefaAtual) {
+            const selecionadas = [].concat(tarefaAtual.pred || []);
+
+            return estado.tasks
+                .filter((t) => !t.group && t.id !== tarefaAtual.id && !dependeDe(t.id, tarefaAtual.id))
+                .map((t) => `<option value="${t.id}"${selecionadas.includes(t.id) ? " selected" : ""}>${escaparHtml(`${t.no} — ${t.name}`)}</option>`)
+                .join("");
         }
 
         function htmlIntervaloData(tarefa, tipo) {
@@ -349,6 +428,7 @@
                                 <input type="text" name="atividade" class="activity-input" data-field="name" data-id="${tarefa.id}" value="${escaparHtml(tarefa.name)}" ${isGroup ? 'style="font-weight:600"' : ""}>
                                 ${tarefa.critical ? '<i class="bi bi-exclamation-triangle-fill status-critical" data-bs-toggle="tooltip" data-bs-title="Crítico"></i>' : ""}
                                 ${emAtraso ? '<i class="bi bi-fire status-overdue" data-bs-toggle="tooltip" data-bs-title="Atrasado"></i>' : ""}
+                                ${tarefa.reagendada ? '<i class="bi bi-arrow-repeat text-info" data-bs-toggle="tooltip" data-bs-title="Data ajustada pela predecessora"></i>' : ""}
                             </div>
                         </td>
                         <td class="col-owner align-middle">
@@ -361,7 +441,7 @@
                             ${isGroup ? "<span>—</span>" : htmlIntervaloData(tarefa, "real")}
                         </td>
                         <td class="col-predecessors align-middle">
-                            ${isGroup ? "<span>—</span>" : `<select name="predecessoras" class="pred-select" data-field="pred">${opcoesPredecessora(tarefa.pred)}</select>`}
+                            ${isGroup ? "<span>—</span>" : `<select name="predecessoras" class="pred-select" data-field="pred" multiple>${opcoesPredecessora(tarefa)}</select>`}
                         </td>
                         <td class="col-progress align-middle">
                             ${isGroup ? "<span>—</span>" : `<input type="number" name="percentual" min="0" max="100" class="progress-input" data-field="progress" value="${tarefa.progress ?? 0}">`}
@@ -436,12 +516,44 @@
             });
         }
 
-        function renderizar() {
-            // 0. Zera o cache: tarefas ou escala podem ter mudado
-            periodosCache = null;
+        // Aplica o multipleSelect nas predecessoras. Ao FECHAR o dropdown grava as
+        // escolhas, acerta a data de início da tarefa e redesenha
+        // (redesenhar com o dropdown aberto o destruiria).
+        function iniciarPredecessoras() {
+            $(".pred-select").each(function () {
+                const el = this;
 
-            // 1. Destrói os tooltips antes de apagar os elementos do DOM
+                $(el).multipleSelect({
+                    width: "100%",
+                    dropWidth: 320,
+                    maxHeight: 250,
+                    placeholder: "Nenhuma",
+                    selectAll: false,
+                    minimumCountSelected: 2,
+                    onOpen: () => (predAberto = el),
+                    onClose: () => {
+                        predAberto = null;
+
+                        const antes = JSON.stringify(buscarTarefa(Number($(el).closest("tr").data("id")))?.pred);
+                        const res = salvarValorNoEstado(el);
+                        if (!res || JSON.stringify(res.task.pred) === antes) return;
+
+                        reagendar([res.task.id]);
+                        setTimeout(renderizar);
+                    }
+                });
+            });
+        }
+
+        function renderizar() {
+            // 0. Zera cache e dropdown aberto: tarefas ou escala podem ter mudado
+            periodosCache = null;
+            predAberto = null;
+
+            // 1. Destrói tooltips e multipleSelect ANTES de apagar o DOM
+            //    (com container: 'body' o dropdown fica solto no body e ficaria órfão)
             $('[data-bs-toggle="tooltip"]').tooltip("dispose");
+            $(".pred-select").multipleSelect("destroy");
 
             // 2. Limpa os containers
             $("#leftBody").empty();
@@ -452,12 +564,14 @@
             renderizarEsquerda();
             renderizarDireita();
 
-            // 4. Inicializa os novos tooltips
+            // 4. Inicializa tooltips e multipleSelect das predecessoras
             if (typeof tooltipsBootstrap === "function") {
                 tooltipsBootstrap();
             } else {
                 $('[data-bs-toggle="tooltip"]').tooltip();
             }
+
+            iniciarPredecessoras();
         }
 
         function atualizarVisibilidadeColunas() {
@@ -473,7 +587,7 @@
             const $input = $(inputEl);
             const $row = $input.closest("tr");
             const id = Number($row.data("id"));
-            const task = estado.tasks.find((t) => t.id === id);
+            const task = buscarTarefa(id);
             if (!task) return null;
 
             const field = $input.data("field");
@@ -485,6 +599,9 @@
                 task[field][index] = val;
             } else if (field === "progress") {
                 task.progress = Number(val);
+            } else if (field === "pred") {
+                // Descarta vínculos que criariam dependência circular
+                task.pred = (val || []).map(Number).filter((pid) => pid !== task.id && !dependeDe(pid, task.id));
             } else {
                 task[field] = val;
             }
@@ -498,19 +615,23 @@
             salvarValorNoEstado(this);
         });
 
-        // 2. Selects (re-renderiza ao alterar)
-        $(document).on("change", ".owner-select, .pred-select", function () {
+        // 2. Responsável (re-renderiza ao alterar)
+        $(document).on("change", ".owner-select", function () {
             salvarValorNoEstado(this);
             renderizar();
         });
 
-        // 3. Re-renderiza ao limpar a data ou ao selecionar uma data com ano completo (4 dígitos)
+        // 3. Datas: re-renderiza ao limpar ou ao selecionar data com ano completo (4 dígitos).
+        //    Se mudou o planejado, empurra as sucessoras e preenche as que estão sem início.
         $(document).on("change", ".date-input", function () {
             const res = salvarValorNoEstado(this);
             if (!res) return;
 
             const partes = res.val.split("-");
-            if (!res.val || (partes.length === 3 && partes[0].length === 4)) renderizar();
+            if (res.val && !(partes.length === 3 && partes[0].length === 4)) return;
+
+            if ($(this).data("field") === "planned") reagendar(sucessorasSemInicio(res.task.id));
+            renderizar();
         });
 
         $(".view-switch button").on("click", function () {
@@ -613,7 +734,7 @@
                 planned: ["", ""],
                 baseline: ["", ""],
                 real: ["", ""],
-                pred: "",
+                pred: [],
                 progress: 0,
                 group: true,
             });
@@ -651,7 +772,7 @@
                 planned: ["", ""],
                 baseline: ["", ""],
                 real: ["", ""],
-                pred: "",
+                pred: [],
                 progress: 0,
                 group: false
             });
@@ -662,7 +783,7 @@
         // REQUISIÇÃO DE EXCLUSÃO (abre o modal)
         $(document).on("click", '[data-btn="delSubTarefa"]', function () {
             const id = Number($(this).data("id"));
-            const task = estado.tasks.find((t) => t.id === id);
+            const task = buscarTarefa(id);
             if (!task) return;
 
             idParaExcluir = id;
@@ -710,7 +831,12 @@
                 }
             }
 
-            estado.tasks.splice(index, qtdParaRemover);
+            const idsRemovidos = estado.tasks.splice(index, qtdParaRemover).map((t) => t.id);
+
+            // Remove das predecessoras das demais tarefas os ids que foram excluídos
+            estado.tasks.forEach((t) => {
+                t.pred = (t.pred || []).filter((pid) => !idsRemovidos.includes(pid));
+            });
 
             reordenarNumeracao();
 
@@ -723,6 +849,9 @@
 
         $("#leftScroll").on("scroll", function () {
             $("#rightScroll").scrollTop($(this).scrollTop());
+
+            // O dropdown fica flutuando no body (container: 'body'), então fecha ao rolar
+            if (predAberto) $(predAberto).multipleSelect("close");
         });
 
         $("#rightScroll").on("scroll", function () {

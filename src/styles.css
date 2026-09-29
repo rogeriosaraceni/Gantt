@@ -281,6 +281,31 @@ date-range
 }
 
 /*-----------------------------------------------------
+multipleselect
+------------------------------------------------------*/
+.ms-drop{
+    width: 200px !important;
+}
+.ms-parent {
+    width: 100% !important;
+}
+.ms-choice > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+/* Nomes longos quebram de linha na lista em vez de gerar barra de rolagem */
+.ms-drop ul > li label {
+    display: flex;
+    align-items: center;
+    white-space: normal;
+}
+.ms-drop ul>li label {
+    margin-top: 0;
+}
+
+
+/*-----------------------------------------------------
 delete-btn
 ------------------------------------------------------*/
 .delete-btn {
