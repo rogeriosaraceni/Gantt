@@ -456,6 +456,7 @@
         function renderizarDireita() {
             const p = periodos();
             const totalWidth = p.arr.length * p.cfg.width;
+            const linhas = new Map();
 
             let headerHtml = `<div class="timeline-header d-flex" style="width:${totalWidth}px;">`;
             p.arr.forEach((per) => {
@@ -464,7 +465,8 @@
             headerHtml += `</div>`;
             $("#timelineHeader").html(headerHtml);
 
-            const $body = $("#timelineBody").empty().css("width", `${totalWidth}px`);
+            // position: relative é o que permite posicionar o SVG das setas sobre as linhas
+            const $body = $("#timelineBody").empty().css({ width: `${totalWidth}px`, position: "relative" });
             const posHoje = posicaoParaData(paraISO(new Date()));
 
             estado.tasks.forEach((tarefa) => {
@@ -513,7 +515,54 @@
                 }
 
                 $body.append($row);
+                linhas.set(tarefa.id, $row[0]);
             });
+
+            desenharSetas($body, totalWidth, linhas);
+        }
+
+        // Setas de dependência término → início, por cima das barras
+        function desenharSetas($body, totalWidth, linhas) {
+            const cor = "#6c757d";
+            const caminhos = [];
+
+            estado.tasks.forEach((t) => {
+                const [iniT, fimT] = t.planned || [];
+                const rowT = linhas.get(t.id);
+                if (t.group || !iniT || !fimT || !rowT) return;
+
+                (t.pred || []).forEach((pid) => {
+                    const [iniP, fimP] = buscarTarefa(pid)?.planned || [];
+                    const rowP = linhas.get(pid);
+                    if (!iniP || !fimP || !rowP) return;
+
+                    const x1 = posicaoParaData(iniP) + larguraParaIntervalo(iniP, fimP);
+                    const y1 = rowP.offsetTop + rowP.offsetHeight / 2;
+                    const x2 = posicaoParaData(iniT);
+                    const y2 = rowT.offsetTop + rowT.offsetHeight / 2;
+
+                    // Folga suficiente: desce direto. Sem folga (caso comum, +1 dia): contorna pela borda da linha
+                    const yBorda = y2 > y1 ? rowT.offsetTop : rowT.offsetTop + rowT.offsetHeight;
+                    const d = x2 >= x1 + 12
+                        ? `M${x1},${y1} H${x1 + 6} V${y2} H${x2}`
+                        : `M${x1},${y1} H${x1 + 6} V${yBorda} H${x2 - 8} V${y2} H${x2}`;
+
+                    caminhos.push(`<path d="${d}"/>`);
+                });
+            });
+
+            if (!caminhos.length) return;
+
+            $body.append(`
+                <svg width="${totalWidth}" height="${$body[0].scrollHeight}" style="position:absolute; top:0; left:0; pointer-events:none; overflow:visible; z-index:5;">
+                    <defs>
+                        <marker id="seta-dep" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+                            <path d="M0,0 L8,4 L0,8 z" fill="${cor}"/>
+                        </marker>
+                    </defs>
+                    <g fill="none" stroke="${cor}" stroke-width="0.75" marker-end="url(#seta-dep)">${caminhos.join("")}</g>
+                </svg>
+            `);
         }
 
         // Aplica o multipleSelect nas predecessoras. Ao FECHAR o dropdown grava as
