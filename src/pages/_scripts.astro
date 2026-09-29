@@ -1,8 +1,28 @@
-<script is:inline src="/data/responsaveis.js"></script>
-<script is:inline src="/data/estado.js"></script>
-
 <script is:inline>
     $(function () {
+
+        const estado = {
+            tasks: [
+
+            ],
+            baselines: []
+        };
+
+        const responsaveis = [
+            "Ana Paula Silva",
+            "Ricardo Alves",
+            "Juliana Martins",
+            "Thiago Souza",
+            "Camila Ferreira",
+            "Carlos Mendes",
+            "Eduardo Santos",
+            "Lanna Souza",
+            "Marcos Lima",
+            "Beatriz Nunes",
+            "Rafael Costa",
+            "Patrícia Gomes",
+        ];
+
         let escalaAtual = "month";
         let compararLinhaBase = false;
         let proximoId = 100;
@@ -109,9 +129,9 @@
 
         function intervaloParaEscala() {
             let dataMin = new Date(2026, 0, 1);
-            let dataMax = new Date(2027, 1, 28);
+        let dataMax = new Date(2027, 1, 28);
 
-            estado.tasks.forEach((tarefa) => {
+        estado.tasks.forEach((tarefa) => {
                 const todasDatas = [
                     ...(tarefa.planned || []),
                     ...(tarefa.baseline || []),
@@ -441,8 +461,8 @@
             renderizarDireita();
 
             // 4. Inicializar os novos tooltips
-            if (typeof inicializarTooltips === "function") {
-                inicializarTooltips();
+            if (typeof tooltipsBootstrap === "function") {
+                tooltipsBootstrap();
             } else {
                 $('[data-bs-toggle="tooltip"]').tooltip();
             }

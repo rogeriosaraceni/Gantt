@@ -1,0 +1,597 @@
+/* ////////////////////////////////////////////////////////////////////
+* - variables
+* - accordion
+* - bgs colors / text colors
+* - breadcrumb-app
+* - btn
+* - btn-excel / btn-pdf
+* - card / cadr-body
+* - container-fluid
+* - modal
+* - nav-tabs
+* - nav-tabs-flat
+* - offcanvas
+* - page-item .active/disabled
+* - pagination
+* - progressbar
+* - tooltip
+* - tab-content
+* - titles - h1, h2, h3, h4, h5, h6
+* - hr
+* - segmentedButton
+//////////////////////////////////////////////////////////////////// */
+
+/* --------------------------------------------------------------------
+* - variables
+* -------------------------------------------------------------------- */
+:root {
+    --bs-body-font-size: 0.9rem;
+    --bs-body-font-weight: 400;
+    --bs-body-line-height: 1.4;
+    --bs-body-color: #6c757d;
+
+    --bs-border-radius: 0.7rem;
+    --bs-transition-hover: all .3s ease 0s;
+    --bs-box-shadow: 0px 1px 5px 0px rgba(154, 161, 171, 0.4);
+
+}
+
+a {
+    transition: var(--bs-transition-hover);
+}
+
+/* --------------------------------------------------------------------
+* - accordion
+---------------------------------------------------------------------- */
+.accordion-button {
+    padding: 0.5rem 1rem;
+    color: #444;
+    background-color: #fafafa;
+}
+.accordion-button:not(.collapsed) {
+    color: #444;
+    background-color: #eee;
+}
+.accordion-button:focus {
+    box-shadow: none;
+}
+
+.accordion-button::after,
+.accordion-button:not(.collapsed)::after {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='gray' stroke-linecap='round' stroke-linejoin='round'%3e%3cpath d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+}
+
+/* --------------------------------------------------------------------
+* - bgs colors / text colors
+* -------------------------------------------------------------------- */
+.bg-primary{ background-color: var(--blue-400)!important;}
+.bg-success{ background-color: var(--green-400)!important;}
+.bg-danger { background-color: var(--red-400)!important;}
+.bg-warning{ background-color: var(--orange-400)!important;}
+
+.text-primary{ color: var(--blue-400)!important;}
+.text-success{ color: var(--green-400)!important;}
+.text-danger { color: var(--red-400)!important;}
+.text-warning{ color: var(--orange-400)!important;}
+
+/* --------------------------------------------------------------------
+* - breadcrumb
+---------------------------------------------------------------------- */
+.breadcrumb {
+   padding: 0.25rem 0.5rem;
+   margin-bottom: 0.5rem;
+   align-items: baseline;
+}
+
+.breadcrumb-item {
+    margin-bottom: 5px;
+}
+
+.breadcrumb { background-color: transparent;}
+.breadcrumb-item a {
+    color: #6c757d;
+    text-decoration: none;
+}
+.breadcrumb-item a:hover {
+    color: var(--app-bordo);
+    text-decoration: underline;
+}
+
+.breadcrumb-item.active {
+    position: relative;
+    overflow: hidden;
+}
+.breadcrumb-item.active {
+    color: var(--app-bordo);
+}
+
+/* --------------------------------------------------------------------
+btn
+---------------------------------------------------------------------- */
+.btn {
+    position: relative;
+    overflow: hidden;
+    transition: var(--bs-transition-hover);
+    --bs-btn-padding-x: .75rem;
+    --bs-btn-padding-y: .215rem;
+    --bs-btn-font-size: 0.9rem;
+}
+.btn-small{
+    padding: .105rem .45rem;
+}
+.btn-transparent{
+    border: none;
+    background-color: transparent;
+}
+.btn-icon {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+@media(max-width: 1400px){ .btn-last-xxl{ float: right;}}
+@media(max-width: 1200px){ .btn-last-xl { float: right;}}
+@media(max-width: 992px) { .btn-last-lg { float: right;}}
+@media(max-width: 768px) { .btn-last-md { float: right;}}
+@media(max-width: 576px) { .btn-last-sm { float: right;}}
+
+.btn-primary,
+.btn-secondary,
+.btn-success,
+.btn-danger,
+.btn-dark,
+.btn-warning,
+.btn-info,
+.btn-light,
+.btn-bordo {
+    transition: all 0.2s;
+    --bs-btn-color: #fff;
+    --bs-btn-hover-color: #fff;
+    --bs-btn-active-color: #fff;
+    --bs-btn-disabled-color: #fff;
+    --bs-btn-focus-shadow-rgb: none;
+    --bs-btn-active-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
+    --bs-btn-border-color: none;
+    --bs-btn-hover-border-color: none;
+    --bs-btn-active-border-color: none;
+    --bs-btn-disabled-border-color: none;
+}
+
+.btn-warning,
+.btn-info,
+.btn-light {
+    --bs-btn-color: #000;
+    --bs-btn-hover-color: #000;
+    --bs-btn-active-color: #000;
+    --bs-btn-disabled-color: #000;
+}
+
+.btn-primary {
+    --bs-btn-bg: var(--primary);
+    --bs-btn-hover-bg: var(--blue-500);
+    --bs-btn-active-bg:var(--blue-500);
+    --bs-btn-disabled-bg: var(--primary);
+}
+.btn-secondary {
+    --bs-btn-bg: var(--secondary);
+    --bs-btn-hover-bg: var(--grey-500);
+    --bs-btn-active-bg:var(--grey-500);
+    --bs-btn-disabled-bg: var(--secondary);
+}
+.btn-success {
+    --bs-btn-bg: var(--success);
+    --bs-btn-hover-bg: var(--green-500);
+    --bs-btn-active-bg:var(--green-500);
+    --bs-btn-disabled-bg: var(--success);
+}
+.btn-danger {
+    --bs-btn-bg: var(--danger);
+    --bs-btn-hover-bg: var(--red-500);
+    --bs-btn-active-bg:var(--red-500);
+    --bs-btn-disabled-bg: var(--danger);
+}
+.btn-warning {
+    --bs-btn-bg: var(--warning);
+    --bs-btn-hover-bg: var(--yellow-500);
+    --bs-btn-active-bg:var(--yellow-500);
+    --bs-btn-disabled-bg: var(--warning);
+}
+.btn-info {
+    --bs-btn-bg: #0dcaf0;
+    --bs-btn-hover-color: #000;
+    --bs-btn-hover-bg: #31d2f2;
+    --bs-btn-active-bg: #3dd5f3;
+    --bs-btn-disabled-bg: #0dcaf0;
+}
+.btn-light {
+    --bs-btn-bg: #f8f9fa;
+    --bs-btn-hover-bg: #d3d4d5;
+    --bs-btn-active-bg: #c6c7c8;
+    --bs-btn-disabled-bg: #f8f9fa;
+}
+.btn-dark {
+    --bs-btn-bg: #212529;
+    --bs-btn-hover-bg: #424649;
+    --bs-btn-active-bg: #4d5154;
+    --bs-btn-disabled-bg: #212529;
+}
+.btn-bordo {
+    --bs-btn-bg: var(--app-bordo);
+    --bs-btn-hover-bg: var(--app-bordo-500);
+    --bs-btn-active-bg:var(--app-bordo-500);
+    --bs-btn-disabled-bg: var(--app-bordo);
+}
+
+/* --------------------------------------------------------------------
+* - btn-excel / btn-pdf
+---------------------------------------------------------------------- */
+.btn-excel::before,
+.btn-pdf::before {
+    margin-right: 0.25rem;
+    font-family: bootstrap-icons !important;
+    font-style: normal;
+    font-weight: 400 !important;
+    font-variant: normal;
+    text-transform: none;
+    line-height: 1;
+    vertical-align: -.125em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+.btn-excel::before {
+    content: "\F389";
+}
+.btn-pdf::before {
+    content: "\F63E";
+}
+
+.btn-excel {
+    color: #fff;
+    background-color: var(--green-500);
+}
+.btn-excel:hover {
+    color: #fff;
+    background-color: var(--green-700);
+}
+.btn-excel:active {
+    color: #fff;
+    background-color: var(--green-700);
+}
+
+.btn-pdf {
+    color: #fff;
+    background-color: var(--red-500);
+}
+.btn-pdf:hover {
+    color: #fff;
+    background-color: var(--red-700);
+}
+.btn-pdf:active {
+    color: #fff;
+    background-color: var(--red-700);
+}
+
+/* --------------------------------------------------------------------
+* - card / cadr-body
+---------------------------------------------------------------------- */
+.card {
+    --bs-card-cap-bg: #fff;
+
+    margin: 0 0 1.3rem 0;
+    border: 0;
+    border-radius: var(--bs-border-radius);
+    box-shadow: var(--bs-box-shadow);
+}
+.card .card-header {
+   padding: 15px 15px 0;
+   border-bottom: none !important;
+}
+
+.card .card-header .card-title,
+.card-title {
+    font-size: 1.25rem;
+    color: #444;
+}
+
+.card .card-footer {
+   padding: 15px 15px 10px 15px;
+   background-color: transparent;
+   border-top: none !important;
+}
+
+/* --------------------------------------------------------------------
+* - container-fluid
+---------------------------------------------------------------------- */
+/* .container-fluid{
+    max-width: 1920px;
+} */
+
+/* --------------------------------------------------------------------
+* - nav-link / dropdown-item /  dropdown-menu
+---------------------------------------------------------------------- */
+.navbar,
+.navbar-nav{
+    --bs-border-radius: 0.5rem;
+}
+
+.nav-link,
+.dropdown-menu,
+.dropdown-item {
+    border-radius: var(--bs-border-radius);
+}
+
+.nav-link {
+    --bs-nav-link-padding-x: 0.5rem;
+    --bs-nav-link-padding-y: 0.25rem;
+}
+
+.dropdown-menu{
+    --bs-dropdown-font-size: 0.9rem;
+    border: 0;
+	padding-bottom: 0;
+	box-shadow: var(--bs-box-shadow) !important;
+}
+
+.dropdown-menu > li:not(:first-child):not(:last-child) > .dropdown-item {
+    border-radius: 0;
+}
+.dropdown-menu > li:first-child > .dropdown-item {
+    border-radius: var(--bs-border-radius) var(--bs-border-radius) 0 0;
+}
+.dropdown-menu > li:last-child > .dropdown-item {
+    border-radius: 0 0 var(--bs-border-radius) var(--bs-border-radius);
+}
+
+.nav-link:hover,
+.nav-link:focus,
+.dropdown-item:focus,
+.dropdown-item:hover {
+    color: var(--bs-dropdown-link-hover-color);
+    background-color: #eee;
+}
+
+/* active */
+.nav-link.active,
+.dropdown-toggle.active {
+    color: #fff !important;
+    background-color: #892935;
+}
+
+/*manter o item do dropdown visualmente marcado */
+.dropdown-item.active,
+.dropdown-item:active {
+    color: #fff;
+    background-color: #892935;
+}
+
+/* --------------------------------------------------------------------
+* - modal
+---------------------------------------------------------------------- */
+.modal .btn-close{ outline: none;}
+
+.modal-content{
+	padding: 1rem;
+}
+.modal-content .modal-body{
+	padding-left: 0;
+	padding-right: 0;
+}
+.modal-content .modal-footer{
+	padding-left: 0;
+	padding-right: 0;
+	padding-bottom: 0;
+}
+
+.modal-content.modal-content .card{
+    margin-left: 0!important;
+    margin-right: 0!important;
+}
+
+.modal-max{
+	max-width: 80%!important;
+}
+
+/* --------------------------------------------------------------------
+* - nav-tabs
+---------------------------------------------------------------------- */
+.nav-tabs .nav-link{
+    transition: all 0.3s;
+}
+
+/* --------------------------------------------------------------------
+* - nav-tabs-flat
+---------------------------------------------------------------------- */
+.nav-tabs.nav-flat {
+    --bs-nav-tabs-border-width: 2px;
+}
+.nav-tabs.nav-flat li a {
+    border: 0;
+    padding: 0.625rem 1.25rem;
+}
+
+.nav-tabs.nav-flat .nav-item .nav-link {
+    position: relative;
+    color: inherit;
+    transition: all 0.2s;
+}
+.nav-tabs.nav-flat .nav-item .nav-link::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: transparent;
+    border-bottom: 2px solid transparent;
+    transition: all 0.3s;
+}
+.nav-tabs.nav-flat .nav-item .nav-link:hover {
+    color: var(--app-bordo);
+    background-color: transparent;
+}
+.nav-tabs.nav-flat .nav-item .nav-link:hover::before {
+    border-bottom: 2px solid var(--app-bordo);
+}
+
+.nav-tabs.nav-flat .nav-link.active {
+    color: var(--app-bordo)!important;
+    font-weight: bold;
+    background-color: transparent;
+}
+.nav-tabs.nav-flat .nav-item .nav-link.active::before {
+    border-bottom: 2px solid var(--app-bordo);
+}
+.nav-tabs.nav-flat .nav-item .nav-link.active:hover {
+    color: var(--app-bordo)!important;
+}
+
+/* --------------------------------------------------------------------
+* - offcanvas
+---------------------------------------------------------------------- */
+.offcanvas, .offcanvas-lg, .offcanvas-md, .offcanvas-sm, .offcanvas-xl, .offcanvas-xxl {
+    --bs-offcanvas-zindex: 1045;
+    --bs-offcanvas-width: 400px;
+    --bs-offcanvas-height: 30vh;
+    --bs-offcanvas-bg: var(--app-dark);
+}
+.btn-close{
+    --bs-btn-close-bg:url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23FFF'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414'/%3e%3c/svg%3e")!important;
+}
+
+/* --------------------------------------------------------------------
+* - page-item .active/disabled
+---------------------------------------------------------------------- */
+.pagination{
+    --bs-pagination-focus-box-shadow: 0 0 0 0.25rem rgba(178, 139, 32, 0.25);
+}
+
+.active>.page-link, .page-link.active {
+    color: var(--bs-pagination-active-color);
+    background-color: var(--bs-pagination-active-bg);
+    border-color: var(--bs-pagination-active-border-color);
+}
+.disabled>.page-link,
+.page-link.disabled {
+    background-color: transparent;
+}
+
+/* --------------------------------------------------------------------
+* - pagination
+---------------------------------------------------------------------- */
+.pagination{
+    --bs-pagination-active-bg: var(--app-bordo);
+    --bs-pagination-active-border-color: var(--app-bordo);
+}
+
+/* --------------------------------------------------------------------
+* - progressbar
+---------------------------------------------------------------------- */
+.progress-sm {
+    min-height: 0.3rem;
+    height: 0.3rem!important;
+}
+.progress, .progress-stacked {
+    --bs-progress-height: 1rem;
+    --bs-progress-font-size: 0.75rem;
+    --bs-progress-bg: #f8f8f8;
+    --bs-progress-border-radius: var(--bs-border-radius);
+    --bs-progress-box-shadow: var(--bs-box-shadow-inset);
+    --bs-progress-bar-color: #fff;
+    --bs-progress-bar-bg: #0d6efd;
+    --bs-progress-bar-transition: width 0.6s ease;
+    display: flex;
+    height: var(--bs-progress-height);
+    overflow: hidden;
+    font-size: var(--bs-progress-font-size);
+    background-color: var(--bs-progress-bg);
+    border-radius: var(--bs-progress-border-radius);
+}
+
+/* --------------------------------------------------------------------
+* - tooltip
+---------------------------------------------------------------------- */
+.tooltip{
+    --bs-tooltip-border-radius: 6px!important;
+}
+
+/* --------------------------------------------------------------------
+* - tab-content
+---------------------------------------------------------------------- */
+.tab-content {
+    border-left: 1px solid var(--bs-border-color);
+    border-right: 1px solid var(--bs-border-color);
+    border-bottom: 1px solid var(--bs-border-color);
+    padding: 10px;
+}
+
+/* --------------------------------------------------------------------
+* - titles - h1, h2, h3, h4, h5, h6
+---------------------------------------------------------------------- */
+.h1, .h2, .h3, .h4, .h5, .h6, h1, h2, h3, h4, h5, h6 {
+   font-weight: 600;
+}
+
+/* --------------------------------------------------------------------
+* - hr
+---------------------------------------------------------------------- */
+hr { opacity: 0.12;}
+
+/* --------------------------------------------------------------------
+* - segmentedButton
+---------------------------------------------------------------------- */
+.segmentedButton-wrapper {
+    display: flex;
+    border-radius: 2rem;
+    overflow: hidden;
+    width: fit-content;
+    background-color: #e6e6e6;
+}
+.segmentedButton {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: -0.5rem;
+    padding: 0.5rem 2rem;
+    font-size: 1rem;
+    color: #777;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    border-radius: 2rem;
+    text-decoration: none;
+}
+.segmentedButton:before {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transform: scaleX(0.32);
+    transition-duration: 0.2s;
+    transition-property: transform, opacity;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+    border-radius: 40px;
+    background-color: transparent;
+    content: '';
+}
+
+.segmentedButton.active {
+    color: #fff !important;
+}
+.segmentedButton.active:before {
+    opacity: 1;
+    transition-duration: 0.2s;
+    transition-property: transform, opacity;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+    transform: scaleX(1);
+    background-color: #1ab394;
+}
+
+.segmentedButton:hover,
+.segmentedButton.active:hover {
+    color: #444 !important;
+}
+
+.segmentedButton .name {
+    z-index: 1;
+}
