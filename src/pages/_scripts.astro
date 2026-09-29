@@ -360,6 +360,8 @@
         }
 
         function verificarAtraso(tarefa) {
+            if (tarefa.group) return filhasDoGrupo(tarefa).some(verificarAtraso);
+
             const dataFimPlan = analisarData(tarefa.planned?.[1]);
             const dataFimReal = analisarData(tarefa.real?.[1]);
             const hoje = new Date();
@@ -370,6 +372,52 @@
 
             return false;
         }
+
+        // Filhas = tarefas logo abaixo do grupo, até o próximo grupo
+        function filhasDoGrupo(grupo) {
+            const filhas = [];
+            for (let i = estado.tasks.indexOf(grupo) + 1; i < estado.tasks.length && !estado.tasks[i].group; i++) {
+                filhas.push(estado.tasks[i]);
+            }
+            return filhas;
+        }
+
+        // Resumo do grupo: menor início, maior fim e progresso ponderado pela duração planejada
+        function resumoGrupo(grupo) {
+            const filhas = filhasDoGrupo(grupo);
+            const hoje = paraISO(new Date());
+
+            const faixa = (campo, fimPadrao = "") => {
+                const comInicio = filhas.filter((t) => t[campo]?.[0]);
+                return [
+                    comInicio.map((t) => t[campo][0]).sort()[0] || "",
+                    comInicio.map((t) => t[campo][1] || fimPadrao).filter(Boolean).sort().pop() || ""
+                ];
+            };
+
+            const pesos = filhas.map((t) => {
+                const [ini, fim] = t.planned || [];
+                return ini && fim ? diferencaDias(analisarData(ini), analisarData(fim)) + 1 : 1;
+            });
+            const total = pesos.reduce((a, b) => a + b, 0);
+
+            return {
+                planned: faixa("planned"),
+                baseline: faixa("baseline"),
+                real: faixa("real", hoje),
+                realAberto: filhas.some((t) => t.real?.[0] && !t.real?.[1]),
+                progress: total ? Math.round(filhas.reduce((soma, t, i) => soma + (t.progress ?? 0) * pesos[i], 0) / total) : 0
+            };
+        }
+
+        const textoIntervalo = ([ini, fim], aberto = false) =>
+            ini ? `${formatarDataBR(ini)} — ${fim && !aberto ? formatarDataBR(fim) : "…"}` : "—";
+
+
+
+
+
+
 
         function acoesHtml(t) {
             const btnAddHtml = t.group ? `
@@ -416,6 +464,8 @@
                 const isGroup = tarefa.group;
                 const classeLinha = isGroup ? "group-row" : "child";
                 const emAtraso = verificarAtraso(tarefa);
+                const resumo = isGroup ? resumoGrupo(tarefa) : null;
+                const somenteLeitura = (texto) => `<span class="small text-secondary">${texto}</span>`;
 
                 $body.append(`
                     <tr class="${classeLinha}" data-id="${tarefa.id}">
@@ -435,16 +485,16 @@
                             ${isGroup ? "<span>—</span>" : `<select name="responsavel" class="owner-select" data-field="owner">${opcoesResponsavel(tarefa.owner)}</select>`}
                         </td>
                         <td class="col-planned align-middle">
-                            ${isGroup ? "<span>—</span>" : htmlIntervaloData(tarefa, "planned")}
+                            ${isGroup ? somenteLeitura(textoIntervalo(resumo.planned)) : htmlIntervaloData(tarefa, "planned")}
                         </td>
                         <td class="col-real align-middle">
-                            ${isGroup ? "<span>—</span>" : htmlIntervaloData(tarefa, "real")}
+                            ${isGroup ? somenteLeitura(textoIntervalo(resumo.real, resumo.realAberto)) : htmlIntervaloData(tarefa, "real")}
                         </td>
                         <td class="col-predecessors align-middle">
                             ${isGroup ? "<span>—</span>" : `<select name="predecessoras" class="pred-select" data-field="pred" multiple>${opcoesPredecessora(tarefa)}</select>`}
                         </td>
                         <td class="col-progress align-middle">
-                            ${isGroup ? "<span>—</span>" : `<input type="number" name="percentual" min="0" max="100" class="progress-input" data-field="progress" value="${tarefa.progress ?? 0}">`}
+                            ${isGroup ? somenteLeitura(`${resumo.progress}%`) : `<input type="number" name="percentual" min="0" max="100" class="progress-input" data-field="progress" value="${tarefa.progress ?? 0}">`}
                         </td>
                     </tr>
                 `);
@@ -471,13 +521,17 @@
 
             estado.tasks.forEach((tarefa) => {
                 const $row = $(`<div class="timeline-row ${tarefa.group ? "group" : ""}" style="width:${totalWidth}px;"></div>`);
+                const resumo = tarefa.group ? resumoGrupo(tarefa) : null;
 
                 if (posHoje > 0 && posHoje < totalWidth) {
                     $row.append(`<div class="today-line" style="left:${posHoje}px;"></div>`);
                 }
 
-                // Barra de referência (planejado ou linha de base)
-                const baselineDates = compararLinhaBase ? (tarefa.baseline || tarefa.planned) : tarefa.planned;
+                // Barra de referência (planejado ou linha de base). No grupo, vem do resumo das filhas
+                const baselineDates = resumo
+                    ? (compararLinhaBase ? resumo.baseline : resumo.planned)
+                    : (compararLinhaBase ? (tarefa.baseline || tarefa.planned) : tarefa.planned);
+
                 if (baselineDates?.[0] && baselineDates?.[1]) {
                     $row.append(`
                         <div
@@ -489,27 +543,31 @@
                     `);
                 }
 
-                // Barra real: só existe quando há data de início real
-                const dataInicioBarra = tarefa.real?.[0];
+                // Barra real: só existe quando há data de início real (no grupo, quando alguma filha começou)
+                const datasReal = resumo ? resumo.real : (tarefa.real || []);
+                const dataInicioBarra = datasReal[0];
+
                 if (dataInicioBarra) {
-                    const dataFimBarra = tarefa.real[1] || paraISO(new Date());
+                    const dataFimBarra = datasReal[1] || paraISO(new Date());
                     const emAtraso = verificarAtraso(tarefa);
 
                     let barClass = tarefa.group ? "bar group-bar" : "bar task-bar";
                     if (emAtraso) barClass += " overdue";
                     else if (tarefa.critical) barClass += " critical";
 
-                    const pct = Math.min(100, Math.max(0, tarefa.progress ?? 0));
-                    const fillHtml = tarefa.group ? "" : `<div class="progress-fill" style="width:${pct}%;"></div>`;
+                    const pct = Math.min(100, Math.max(0, resumo ? resumo.progress : (tarefa.progress ?? 0)));
+                    const sufixo = ` (${pct}%) - ${formatarDataBR(dataInicioBarra)} a ${formatarDataBR(dataFimBarra)}`;
 
                     $row.append(`
                         <div
                             class="${barClass}"
                             style="left:${posicaoParaData(dataInicioBarra)}px; width:${larguraParaIntervalo(dataInicioBarra, dataFimBarra)}px;"
+                            data-task-id="${tarefa.id}"
+                            data-suffix="${escaparHtml(sufixo)}"
                             data-bs-toggle="tooltip"
-                            data-bs-title="${escaparHtml(tarefa.name)} (${pct}%) - ${formatarDataBR(dataInicioBarra)} a ${formatarDataBR(dataFimBarra)}"
+                            data-bs-title="${escaparHtml(tarefa.name + sufixo)}"
                         >
-                            ${fillHtml}
+                            <div class="progress-fill" style="width:${pct}%;"></div>
                         </div>
                     `);
                 }
@@ -894,6 +952,34 @@
 
             idParaExcluir = null;
             renderizar();
+        });
+
+        // Progresso: re-renderiza para atualizar o resumo do grupo (% e barra)
+        $(document).on("change", ".progress-input", function () {
+            salvarValorNoEstado(this);
+            renderizar();
+        });
+
+        // Nome: atualiza o tooltip da barra em tempo real, sem redesenhar (não tira o foco do campo)
+        $(document).on("input", ".activity-input", function () {
+            const id = Number($(this).closest("tr").data("id"));
+            const nome = $(this).val();
+
+            $(`.bar[data-task-id="${id}"]`).each(function () {
+                const titulo = nome + $(this).attr("data-suffix");
+                $(this).attr("data-bs-title", titulo);
+                bootstrap.Tooltip.getInstance(this)?.setContent?.({ ".tooltip-inner": titulo });
+            });
+        });
+
+        // Nome confirmado: atualiza o rótulo nas opções das predecessoras
+        $(document).on("change", ".activity-input", function () {
+            const id = Number($(this).closest("tr").data("id"));
+            const tarefa = buscarTarefa(id);
+            if (!tarefa) return;
+
+            $(`.pred-select option[value="${id}"]`).text(`${tarefa.no} — ${tarefa.name}`);
+            $(".pred-select").multipleSelect("refresh");
         });
 
         $("#leftScroll").on("scroll", function () {
