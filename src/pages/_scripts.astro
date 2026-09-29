@@ -2,9 +2,7 @@
     $(function () {
 
         const estado = {
-            tasks: [
-
-            ],
+            tasks: [],
             baselines: []
         };
 
@@ -27,7 +25,7 @@
         let compararLinhaBase = false;
         let proximoId = 100;
         let idParaExcluir = null;
-        let dataInicioVisivel = new Date(); // Data atual ou início do projeto
+        let periodosCache = null;
 
         function recalcularNumeracao() {
             let contadorGrupo = 0;
@@ -128,10 +126,12 @@
         }
 
         function intervaloParaEscala() {
-            let dataMin = new Date(2026, 0, 1);
-        let dataMax = new Date(2027, 1, 28);
+            // Intervalo inicial: 6 meses antes e 6 meses depois de hoje
+            const hoje = new Date();
+            let dataMin = new Date(hoje.getFullYear(), hoje.getMonth() - 6, 1);
+            let dataMax = new Date(hoje.getFullYear(), hoje.getMonth() + 7, 0);
 
-        estado.tasks.forEach((tarefa) => {
+            estado.tasks.forEach((tarefa) => {
                 const todasDatas = [
                     ...(tarefa.planned || []),
                     ...(tarefa.baseline || []),
@@ -166,7 +166,7 @@
             return { unitDays: 30, width: 110 };
         }
 
-        function periodos() {
+        function calcularPeriodos() {
             const { min: dataMin, max: dataMax } = intervaloParaEscala();
             const configuracao = configuracaoUnidade();
             const listaPeriodos = [];
@@ -204,6 +204,11 @@
             }
 
             return { arr: listaPeriodos, min: dataMin, max: dataMax, cfg: configuracao };
+        }
+
+        // Cache zerado a cada renderizar(): o cálculo roda uma vez por renderização
+        function periodos() {
+            return periodosCache || (periodosCache = calcularPeriodos());
         }
 
         function posicaoParaData(textoData) {
@@ -308,7 +313,6 @@
                         data-bs-title="Ações"
                         data-bs-toggle-tooltip="tooltip"
                     >
-
                         <i class="bi bi-three-dots-vertical fs-6"></i>
                     </button>
 
@@ -327,7 +331,7 @@
         }
 
         function renderizarEsquerda() {
-            const $body =$("#leftBody").empty();
+            const $body = $("#leftBody").empty();
 
             estado.tasks.forEach((tarefa) => {
                 const isGroup = tarefa.group;
@@ -380,63 +384,48 @@
             headerHtml += `</div>`;
             $("#timelineHeader").html(headerHtml);
 
-            const $body =$("#timelineBody").empty().css("width", `${totalWidth}px`);
+            const $body = $("#timelineBody").empty().css("width", `${totalWidth}px`);
+            const posHoje = posicaoParaData(paraISO(new Date()));
 
             estado.tasks.forEach((tarefa) => {
-                const $row =$(`<div class="timeline-row ${tarefa.group ? "group" : ""}" style="width:${totalWidth}px;"></div>`);
+                const $row = $(`<div class="timeline-row ${tarefa.group ? "group" : ""}" style="width:${totalWidth}px;"></div>`);
 
-                const posHoje = posicaoParaData(paraISO(new Date()));
                 if (posHoje > 0 && posHoje < totalWidth) {
                     $row.append(`<div class="today-line" style="left:${posHoje}px;"></div>`);
                 }
 
+                // Barra de referência (planejado ou linha de base)
                 const baselineDates = compararLinhaBase ? (tarefa.baseline || tarefa.planned) : tarefa.planned;
-                if (baselineDates && baselineDates[0] && baselineDates[1]) {
-                    const leftBase = posicaoParaData(baselineDates[0]);
-                    const widthBase = larguraParaIntervalo(baselineDates[0], baselineDates[1]);
-                    const dtInicioBR = formatarDataBR(baselineDates[0]);
-                    const dtFimBR = formatarDataBR(baselineDates[1]);
-
+                if (baselineDates?.[0] && baselineDates?.[1]) {
                     $row.append(`
                         <div
                             class="bar baseline-bar"
-                            style="left:${leftBase}px; width:${widthBase}px;"
+                            style="left:${posicaoParaData(baselineDates[0])}px; width:${larguraParaIntervalo(baselineDates[0], baselineDates[1])}px;"
                             data-bs-toggle="tooltip"
-                            data-bs-title="Linha de Base: ${dtInicioBR} a ${dtFimBR}"
+                            data-bs-title="Linha de Base: ${formatarDataBR(baselineDates[0])} a ${formatarDataBR(baselineDates[1])}"
                         ></div>
                     `);
                 }
 
-                const usaReal = Boolean(tarefa.real && tarefa.real[0]);
-                const dataInicioBarra = usaReal ? tarefa.real[0] : tarefa.planned?.[0];
-
-                let dataFimBarra = usaReal ? tarefa.real[1] : tarefa.planned?.[1];
-                if (usaReal && !dataFimBarra) {
-                    dataFimBarra = paraISO(new Date());
-                }
-
-                if (dataInicioBarra && dataFimBarra) {
-                    const left = posicaoParaData(dataInicioBarra);
-                    const width = larguraParaIntervalo(dataInicioBarra, dataFimBarra);
+                // Barra real: só existe quando há data de início real
+                const dataInicioBarra = tarefa.real?.[0];
+                if (dataInicioBarra) {
+                    const dataFimBarra = tarefa.real[1] || paraISO(new Date());
                     const emAtraso = verificarAtraso(tarefa);
 
-                    let barClass = "bar task-bar";
-                    if (tarefa.group) barClass = "bar group-bar";
+                    let barClass = tarefa.group ? "bar group-bar" : "bar task-bar";
                     if (emAtraso) barClass += " overdue";
                     else if (tarefa.critical) barClass += " critical";
 
                     const pct = Math.min(100, Math.max(0, tarefa.progress ?? 0));
-                    const fillHtml = !tarefa.group ? `<div class="progress-fill" style="width:${pct}%;"></div>` : "";
-
-                    const dtInicioBR = formatarDataBR(dataInicioBarra);
-                    const dtFimBR = formatarDataBR(dataFimBarra);
+                    const fillHtml = tarefa.group ? "" : `<div class="progress-fill" style="width:${pct}%;"></div>`;
 
                     $row.append(`
                         <div
                             class="${barClass}"
-                            style="left:${left}px; width:${width}px;"
+                            style="left:${posicaoParaData(dataInicioBarra)}px; width:${larguraParaIntervalo(dataInicioBarra, dataFimBarra)}px;"
                             data-bs-toggle="tooltip"
-                            data-bs-title="${escaparHtml(tarefa.name)} (${pct}%) - ${dtInicioBR} a ${dtFimBR}"
+                            data-bs-title="${escaparHtml(tarefa.name)} (${pct}%) - ${formatarDataBR(dataInicioBarra)} a ${formatarDataBR(dataFimBarra)}"
                         >
                             ${fillHtml}
                         </div>
@@ -448,19 +437,22 @@
         }
 
         function renderizar() {
-            // 1. Destruir as instâncias de tooltips existentes ANTES de apagar os elementos do DOM
+            // 0. Zera o cache: tarefas ou escala podem ter mudado
+            periodosCache = null;
+
+            // 1. Destrói os tooltips antes de apagar os elementos do DOM
             $('[data-bs-toggle="tooltip"]').tooltip("dispose");
 
-            // 2. Limpar os containers
+            // 2. Limpa os containers
             $("#leftBody").empty();
             $("#rightBody").empty();
 
-            // 3. Processar regras e renderizar o HTML
+            // 3. Processa regras e renderiza o HTML
             recalcularNumeracao();
             renderizarEsquerda();
             renderizarDireita();
 
-            // 4. Inicializar os novos tooltips
+            // 4. Inicializa os novos tooltips
             if (typeof tooltipsBootstrap === "function") {
                 tooltipsBootstrap();
             } else {
@@ -476,24 +468,7 @@
             });
         }
 
-        // EVENTOS
-        // 1. Atualização em tempo real do texto da atividade e progresso
-        $(document).on("input", ".activity-input, .progress-input", function () {
-            const $row = $(this).closest("tr");
-            const id = Number($row.data("id"));
-            const task = estado.tasks.find((t) => t.id === id);
-            if (!task) return;
-
-            const field = $(this).data("field");
-            if (field === "progress") {
-                task.progress = Number($(this).val());
-            } else {
-                task[field] = $(this).val();
-            }
-        });
-
-        // EVENTOS
-        // Helper para persistir o estado no objeto em JS
+        // Persiste o valor do input no objeto de estado
         function salvarValorNoEstado(inputEl) {
             const $input = $(inputEl);
             const $row = $input.closest("tr");
@@ -517,40 +492,25 @@
             return { task, val };
         }
 
-        // 1. Atualização em tempo real do texto da atividade e progresso
-        $(document).on("input", ".activity-input, .progress-input", function () {
+        // EVENTOS
+        // 1. Atualização em tempo real do texto da atividade, progresso e datas
+        $(document).on("input", ".activity-input, .progress-input, .date-input", function () {
             salvarValorNoEstado(this);
         });
 
-        // 2. Selects e inputs padrão (re-renderiza ao alterar)
+        // 2. Selects (re-renderiza ao alterar)
         $(document).on("change", ".owner-select, .pred-select", function () {
             salvarValorNoEstado(this);
             renderizar();
         });
 
-        // 3. Atualização contínua do objeto enquanto digita no campo de data
-        $(document).on("input", ".date-input", function () {
-            salvarValorNoEstado(this);
-        });
-
-        // 4. Re-renderiza a tabela apenas ao selecionar uma data válida no calendário (evento change)
+        // 3. Re-renderiza ao limpar a data ou ao selecionar uma data com ano completo (4 dígitos)
         $(document).on("change", ".date-input", function () {
             const res = salvarValorNoEstado(this);
             if (!res) return;
 
-            const val = res.val;
-
-            // Se o campo for limpo
-            if (!val) {
-                renderizar();
-                return;
-            }
-
-            // Garante que o ano possui 4 dígitos completos antes de recriar a DOM
-            const partes = val.split("-");
-            if (partes.length === 3 && partes[0].length === 4) {
-                renderizar();
-            }
+            const partes = res.val.split("-");
+            if (!res.val || (partes.length === 3 && partes[0].length === 4)) renderizar();
         });
 
         $(".view-switch button").on("click", function () {
@@ -559,10 +519,6 @@
             escalaAtual = $(this).data("scale");
             renderizar();
         });
-
-        if (!estado.baselines) {
-            estado.baselines = [];
-        }
 
         $('[data-gantt-btn="saveBeseline"]').on("click", function () {
             estado.tasks.forEach((t) => {
@@ -576,16 +532,14 @@
                 year: "numeric"
             });
 
-            const registro = {
+            estado.baselines.push({
                 versao: numeroVersao,
                 data: dataHoje,
                 texto: `Linha de base ${numeroVersao} salva em ${dataHoje}`,
                 tasks: JSON.parse(JSON.stringify(estado.tasks))
-            };
+            });
 
-            estado.baselines.push(registro);
-
-            const $lista =$("#listaBaselines").empty();
+            const $lista = $("#listaBaselines").empty();
             estado.baselines.forEach((b) => {
                 $lista.append(`
                     <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -596,12 +550,11 @@
 
             renderizar();
 
-            const modal = new bootstrap.Modal(document.getElementById("modalBaseline"));
-            modal.show();
+            new bootstrap.Modal(document.getElementById("modalBaseline")).show();
         });
 
         $('[data-gantt-btn="compare"]').on("click", function () {
-            if (!estado.baselines || estado.baselines.length === 0) {
+            if (!estado.baselines.length) {
                 alert("Nenhuma linha de base foi salva ainda.");
                 return;
             }
@@ -614,9 +567,9 @@
 
             $.magnificPopup.open({
                 items: {
-                    src: '/popups/compara-linha-base'
+                    src: "/popups/compara-linha-base"
                 },
-                type: 'iframe',
+                type: "iframe",
                 iframe: {
                     markup: '<div class="mfp-iframe-scaler" style="padding-top: 80vh;">' +
                             '<div class="mfp-close"></div>' +
@@ -626,23 +579,18 @@
             });
         });
 
-        $(".column-toggle").on("change", function () {
-            atualizarVisibilidadeColunas();
-        });
+        $(".column-toggle").on("change", atualizarVisibilidadeColunas);
 
         // Rola 300px para a esquerda
         $('[data-gantt-btn="prev"]').on("click", function () {
             const $container = $("#rightScroll");
-            $container.animate({
-                scrollLeft: $container.scrollLeft() - 300
-            }, 200);
+            $container.animate({ scrollLeft: $container.scrollLeft() - 300 }, 200);
         });
+
         // Rola 300px para a direita
         $('[data-gantt-btn="next"]').on("click", function () {
             const $container = $("#rightScroll");
-            $container.animate({
-                scrollLeft: $container.scrollLeft() + 300
-            }, 200);
+            $container.animate({ scrollLeft: $container.scrollLeft() + 300 }, 200);
         });
 
         $("#rightScroll").on("scroll", function () {
@@ -650,79 +598,68 @@
             const scrollLeft = $container.scrollLeft();
             const maxScroll = $container[0].scrollWidth - $container.outerWidth();
 
-            // Desativa 'prev' se estiver no início
+            // Desativa 'prev' no início e 'next' no fim
             $('[data-gantt-btn="prev"]').prop("disabled", scrollLeft <= 0);
-
-            // Desativa 'next' se atingir o fim
             $('[data-gantt-btn="next"]').prop("disabled", scrollLeft >= maxScroll - 1);
         });
 
         $(document).on("click", '[data-gantt-btn="addAtividade"]', function () {
             proximoId++;
-            const novaTarefa = {
+            estado.tasks.push({
                 id: proximoId,
                 no: "",
                 name: "Nova Atividade",
                 owner: "",
-                planned: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
-                baseline: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
+                planned: ["", ""],
+                baseline: ["", ""],
                 real: ["", ""],
                 pred: "",
                 progress: 0,
                 group: true,
-            };
-
-            estado.tasks.push(novaTarefa);
+            });
 
             reordenarNumeracao();
             renderizar();
 
-            // Procura o input do nome da nova tarefa recém-renderizada pelo ID ou atributo data
-            const $novoInput =$(`input[data-id="${proximoId}"][data-field="name"]`); // Ajuste o seletor para o seu input de nome
+            const $novoInput = $(`input[data-id="${proximoId}"][data-field="name"]`);
 
             if ($novoInput.length) {
-                // 1. Rola o container/janela de forma suave até o novo input
+                // Rola até o novo input e seleciona o texto para edição rápida
                 $novoInput[0].scrollIntoView({ behavior: "smooth", block: "center" });
-
-                // 2. Coloca o foco no input e seleciona o texto "Nova Atividade" para facilitar a edição rápida
-                setTimeout(() => {
-                    $novoInput.trigger("focus").select();
-                }, 150); // O pequeno timeout garante o alinhamento com a rolagem
+                setTimeout(() => $novoInput.trigger("focus").select(), 150);
             }
         });
 
-        // ADICIONAR SUBTAREFA (Apenas nos Títulos de Grupo)
+        // ADICIONAR SUBTAREFA (apenas nos títulos de grupo)
         $(document).on("click", '[data-btn="addSubTarefa"]', function () {
             const id = Number($(this).data("id"));
             const indexPai = estado.tasks.findIndex((t) => t.id === id);
             if (indexPai === -1) return;
 
             // Procura o fim do grupo atual (próximo item com group: true ou fim da lista)
-            let indexInserção = indexPai + 1;
-            while (indexInserção < estado.tasks.length && !estado.tasks[indexInserção].group) {
-                indexInserção++;
+            let indexInsercao = indexPai + 1;
+            while (indexInsercao < estado.tasks.length && !estado.tasks[indexInsercao].group) {
+                indexInsercao++;
             }
 
             proximoId++;
-            const novaSubtarefa = {
+            estado.tasks.splice(indexInsercao, 0, {
                 id: proximoId,
                 no: "",
                 name: "Nova Subtarefa",
                 owner: "",
-                planned: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
-                baseline: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
+                planned: ["", ""],
+                baseline: ["", ""],
                 real: ["", ""],
                 pred: "",
                 progress: 0,
                 group: false
-            };
+            });
 
-            // Insere no final do grupo correspondente
-            estado.tasks.splice(indexInserção, 0, novaSubtarefa);
             renderizar();
         });
 
-        // REQUISIÇÃO DE EXCLUSÃO (ABRE O MODAL)
+        // REQUISIÇÃO DE EXCLUSÃO (abre o modal)
         $(document).on("click", '[data-btn="delSubTarefa"]', function () {
             const id = Number($(this).data("id"));
             const task = estado.tasks.find((t) => t.id === id);
@@ -730,16 +667,13 @@
 
             idParaExcluir = id;
 
-            // Elementos internos do include do modal
             const $modalTitle = $("#deleteActivityModalLabel");
             const $iconContainer = $("#deleteActivityModal .delete-modal-icon");
-            const $taskName = $("#deleteActivityName");
-            const $msgText = $("#deleteActivityModal .text-secondary");
+            const $msgText = $("#deleteActivityModal .modal-body p:last");
 
-            $taskName.text(task.name);
+            $("#deleteActivityName").text(task.name);
 
             if (task.group) {
-                // Estilo e mensagem diferenciada para GRUPOS
                 $modalTitle.text("Excluir grupo");
                 $iconContainer.html('<i class="bi bi-exclamation-triangle-fill text-danger fs-1"></i>');
                 $msgText
@@ -747,7 +681,6 @@
                     .addClass("text-danger fw-semibold")
                     .text("Atenção: Ao excluir este grupo, TODAS as subtarefas vinculadas a ele também serão excluídas!");
             } else {
-                // Estilo padrão para SUBTAREFAS
                 $modalTitle.text("Excluir atividade");
                 $iconContainer.html('<i class="bi bi-trash3 fs-1"></i>');
                 $msgText
@@ -756,9 +689,7 @@
                     .text("Tem certeza que deseja excluir esta atividade?");
             }
 
-            const deleteModalElem = document.getElementById("deleteActivityModal");
-            const modalInstance = bootstrap.Modal.getOrCreateInstance(deleteModalElem);
-            modalInstance.show();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById("deleteActivityModal")).show();
         });
 
         $("#btnConfirmDelete").on("click", function () {
@@ -767,29 +698,23 @@
             const index = estado.tasks.findIndex((t) => t.id === idParaExcluir);
             if (index === -1) return;
 
-            const task = estado.tasks[index];
+            let qtdParaRemover = 1;
 
-            if (task.group) {
-                // Remove o grupo e todas as subtarefas filhas sequenciais
-                let qtdParaRemover = 1;
+            // Grupo: remove também as subtarefas filhas sequenciais
+            if (estado.tasks[index].group) {
                 while (
                     index + qtdParaRemover < estado.tasks.length &&
                     !estado.tasks[index + qtdParaRemover].group
                 ) {
                     qtdParaRemover++;
                 }
-                estado.tasks.splice(index, qtdParaRemover);
-            } else {
-                // Remove apenas a subtarefa
-                estado.tasks.splice(index, 1);
             }
 
-            // Recalcula o 'no' (1, 1.1, 1.2, 2...)
+            estado.tasks.splice(index, qtdParaRemover);
+
             reordenarNumeracao();
 
-            // Fecha o modal
-            const deleteModalElem = document.getElementById("deleteActivityModal");
-            const modalInstance = bootstrap.Modal.getInstance(deleteModalElem);
+            const modalInstance = bootstrap.Modal.getInstance(document.getElementById("deleteActivityModal"));
             if (modalInstance) modalInstance.hide();
 
             idParaExcluir = null;
