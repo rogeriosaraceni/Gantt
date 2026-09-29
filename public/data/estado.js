@@ -1,4 +1,4 @@
-export const estado = {
+const estado = {
     tasks: [
         // Planejamento e Mobilização
         {

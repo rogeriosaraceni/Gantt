@@ -1,0 +1,790 @@
+<script is:inline src="/data/responsaveis.js"></script>
+<script is:inline src="/data/estado.js"></script>
+
+<script is:inline>
+    $(function () {
+        let escalaAtual = "month";
+        let compararLinhaBase = false;
+        let proximoId = 100;
+        let idParaExcluir = null;
+        let dataInicioVisivel = new Date(); // Data atual ou início do projeto
+
+        function recalcularNumeracao() {
+            let contadorGrupo = 0;
+            let contadorFilha = 0;
+
+            estado.tasks.forEach((tarefa) => {
+                if (tarefa.group) {
+                    contadorGrupo++;
+                    contadorFilha = 0;
+                    tarefa.no = `${contadorGrupo}.0`;
+                } else {
+                    if (contadorGrupo === 0) contadorGrupo = 1;
+                    contadorFilha++;
+                    tarefa.no = `${contadorGrupo}.${contadorFilha}`;
+                }
+            });
+        }
+
+        function reordenarNumeracao() {
+            let grupoAtual = 0;
+            let subItemAtual = 0;
+
+            estado.tasks.forEach((t) => {
+                if (t.group) {
+                    grupoAtual++;
+                    subItemAtual = 0;
+                    t.no = `${grupoAtual}`;
+                } else {
+                    subItemAtual++;
+                    t.no = `${grupoAtual}.${subItemAtual}`;
+                }
+            });
+        }
+
+        function escaparHtml(valor) {
+            return String(valor ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
+        }
+
+        function analisarData(texto) {
+            if (!texto) return null;
+            const [ano, mes, dia] = texto.split("-").map(Number);
+            return new Date(ano, mes - 1, dia);
+        }
+
+        function paraISO(objetoData) {
+            if (!objetoData) return "";
+            const ano = objetoData.getFullYear();
+            const mes = String(objetoData.getMonth() + 1).padStart(2, "0");
+            const dia = String(objetoData.getDate()).padStart(2, "0");
+            return `${ano}-${mes}-${dia}`;
+        }
+
+        function formatarDataBR(textoISO) {
+            if (!textoISO) return "";
+            const [ano, mes, dia] = textoISO.split("-");
+            if (!ano || !mes || !dia) return textoISO;
+            return `${dia}/${mes}/${ano}`;
+        }
+
+        function adicionarDias(dataInicial, dias) {
+            const res = new Date(dataInicial);
+            res.setDate(res.getDate() + dias);
+            return res;
+        }
+
+        function inicioDaSemana(data) {
+            const dataSegunda = new Date(data);
+            const diaDaSemana = dataSegunda.getDay();
+            const diasAteSegunda = diaDaSemana === 0 ? -6 : 1 - diaDaSemana;
+            dataSegunda.setDate(dataSegunda.getDate() + diasAteSegunda);
+            dataSegunda.setHours(0, 0, 0, 0);
+            return dataSegunda;
+        }
+
+        function inicioDoMes(data) {
+            return new Date(data.getFullYear(), data.getMonth(), 1);
+        }
+
+        function inicioDoAno(data) {
+            return new Date(data.getFullYear(), 0, 1);
+        }
+
+        function diferencaDias(dataInicial, dataFinal) {
+            const msPorDia = 86400000;
+            return Math.round((dataFinal - dataInicial) / msPorDia);
+        }
+
+        function obterSemanaISO(data) {
+            const dataUtc = new Date(Date.UTC(data.getFullYear(), data.getMonth(), data.getDate()));
+            const diaDaSemana = dataUtc.getUTCDay() || 7;
+            dataUtc.setUTCDate(dataUtc.getUTCDate() + 4 - diaDaSemana);
+            const dataInicioAno = new Date(Date.UTC(dataUtc.getUTCFullYear(), 0, 1));
+            return Math.ceil(((dataUtc - dataInicioAno) / 86400000 + 1) / 7);
+        }
+
+        function intervaloParaEscala() {
+            let dataMin = new Date(2026, 0, 1);
+            let dataMax = new Date(2027, 1, 28);
+
+            estado.tasks.forEach((tarefa) => {
+                const todasDatas = [
+                    ...(tarefa.planned || []),
+                    ...(tarefa.baseline || []),
+                    ...(tarefa.real || [])
+                ];
+                todasDatas.forEach((textoData) => {
+                    const d = analisarData(textoData);
+                    if (!d) return;
+                    if (d < dataMin) dataMin = new Date(d);
+                    if (d > dataMax) dataMax = new Date(d);
+                });
+            });
+
+            if (escalaAtual === "week") {
+                dataMin = inicioDaSemana(adicionarDias(dataMin, -14));
+                dataMax = inicioDaSemana(adicionarDias(dataMax, 14));
+                dataMax = adicionarDias(dataMax, 6);
+            } else if (escalaAtual === "month") {
+                dataMin = inicioDoMes(adicionarDias(dataMin, -20));
+                dataMax = new Date(dataMax.getFullYear(), dataMax.getMonth() + 2, 0);
+            } else {
+                dataMin = inicioDoAno(adicionarDias(dataMin, -60));
+                dataMax = new Date(dataMax.getFullYear() + 1, 11, 31);
+            }
+
+            return { min: dataMin, max: dataMax };
+        }
+
+        function configuracaoUnidade() {
+            if (escalaAtual === "week") return { unitDays: 7, width: 90 };
+            if (escalaAtual === "year") return { unitDays: 365, width: 220 };
+            return { unitDays: 30, width: 110 };
+        }
+
+        function periodos() {
+            const { min: dataMin, max: dataMax } = intervaloParaEscala();
+            const configuracao = configuracaoUnidade();
+            const listaPeriodos = [];
+
+            if (escalaAtual === "week") {
+                let dataAtual = inicioDaSemana(dataMin);
+                while (dataAtual <= dataMax) {
+                    listaPeriodos.push({
+                        start: new Date(dataAtual),
+                        end: adicionarDias(dataAtual, 6),
+                        label: `Sem. ${obterSemanaISO(dataAtual)} / ${String(dataAtual.getFullYear()).slice(-2)}`,
+                    });
+                    dataAtual = adicionarDias(dataAtual, 7);
+                }
+            } else if (escalaAtual === "month") {
+                let dataAtual = inicioDoMes(dataMin);
+                while (dataAtual <= dataMax) {
+                    listaPeriodos.push({
+                        start: new Date(dataAtual),
+                        end: new Date(dataAtual.getFullYear(), dataAtual.getMonth() + 1, 0),
+                        label: dataAtual.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" }).replace(".", ""),
+                    });
+                    dataAtual = new Date(dataAtual.getFullYear(), dataAtual.getMonth() + 1, 1);
+                }
+            } else {
+                let dataAtual = inicioDoAno(dataMin);
+                while (dataAtual <= dataMax) {
+                    listaPeriodos.push({
+                        start: new Date(dataAtual),
+                        end: new Date(dataAtual.getFullYear(), 11, 31),
+                        label: `${dataAtual.getFullYear()}`,
+                    });
+                    dataAtual = new Date(dataAtual.getFullYear() + 1, 0, 1);
+                }
+            }
+
+            return { arr: listaPeriodos, min: dataMin, max: dataMax, cfg: configuracao };
+        }
+
+        function posicaoParaData(textoData) {
+            const dados = periodos();
+            const d = analisarData(textoData);
+            if (!d) return 0;
+            const dias = diferencaDias(dados.min, d);
+            return (dias / dados.cfg.unitDays) * dados.cfg.width;
+        }
+
+        function larguraParaIntervalo(textoIni, textoFim) {
+            if (!textoIni || !textoFim) return 0;
+            const dIni = analisarData(textoIni);
+            const dFim = analisarData(textoFim);
+            if (!dIni || !dFim) return 0;
+
+            const cfg = configuracaoUnidade();
+            const dias = diferencaDias(dIni, dFim) + 1;
+            return Math.max(6, (dias / cfg.unitDays) * cfg.width);
+        }
+
+        function opcoesResponsavel(selecionado) {
+            let html = '<option value="">—</option>';
+            responsaveis.forEach((resp) => {
+                html += `<option value="${escaparHtml(resp)}"${resp === selecionado ? " selected" : ""}>${escaparHtml(resp)}</option>`;
+            });
+            return html;
+        }
+
+        function opcoesPredecessora(numeroSelecionado) {
+            let html = '<option value="">Nenhuma</option>';
+            estado.tasks
+                .filter((t) => !t.group)
+                .forEach((t) => {
+                    html += `<option value="${escaparHtml(t.no)}"${t.no === numeroSelecionado ? " selected" : ""}>${escaparHtml(t.no + " — " + t.name)}</option>`;
+                });
+            return html;
+        }
+
+        function htmlIntervaloData(tarefa, tipo) {
+            const datas = tarefa[tipo] || ["", ""];
+            const val0 = (datas[0] || "").trim();
+            const val1 = (datas[1] || "").trim();
+
+            return `
+                <div class="date-range">
+                    <input
+                        type="date"
+                        name="${tipo}"
+                        class="form-control form-control-sm date-input"
+                        data-field="${tipo}"
+                        data-index="0"
+                        min="2000-01-01"
+                        max="2099-12-31"
+                        value="${val0}"
+                    >
+                    <span>—</span>
+                    <input
+                        type="date"
+                        name="${tipo}"
+                        class="form-control form-control-sm date-input"
+                        data-field="${tipo}"
+                        data-index="1"
+                        min="2000-01-01"
+                        max="2099-12-31"
+                        value="${val1}"
+                    >
+                </div>
+            `;
+        }
+
+        function verificarAtraso(tarefa) {
+            const dataFimPlan = analisarData(tarefa.planned?.[1]);
+            const dataFimReal = analisarData(tarefa.real?.[1]);
+            const hoje = new Date();
+
+            if (!dataFimPlan) return false;
+            if (dataFimReal && dataFimReal > dataFimPlan) return true;
+            if (!dataFimReal && tarefa.real?.[0] && hoje > dataFimPlan && (tarefa.progress ?? 0) < 100) return true;
+
+            return false;
+        }
+
+        function acoesHtml(t) {
+            const btnAddHtml = t.group ? `
+                <li>
+                    <button type="button" class="dropdown-item" data-btn="addSubTarefa" data-id="${t.id}">
+                        <small class="d-flex align-items-center gap-2">
+                            <i class="bi bi-plus-lg text-primary"></i> Adicionar subtarefa
+                        </small>
+                    </button>
+                </li>
+            ` : "";
+
+            return `
+                <div class="dropdown text-center">
+                    <button
+                        class="btn btn-link text-secondary p-0 border-0"
+                        type="button"
+                        data-bs-toggle="dropdown"
+                        aria-expanded="false"
+                        data-bs-title="Ações"
+                        data-bs-toggle-tooltip="tooltip"
+                    >
+
+                        <i class="bi bi-three-dots-vertical fs-6"></i>
+                    </button>
+
+                    <ul class="dropdown-menu dropdown-menu-start shadow-sm p-0 overflow-hidden">
+                        ${btnAddHtml}
+                        <li>
+                            <button type="button" class="dropdown-item text-danger" data-btn="delSubTarefa" data-id="${t.id}">
+                                <small class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-trash"></i> Excluir
+                                </small>
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+            `;
+        }
+
+        function renderizarEsquerda() {
+            const $body =$("#leftBody").empty();
+
+            estado.tasks.forEach((tarefa) => {
+                const isGroup = tarefa.group;
+                const classeLinha = isGroup ? "group-row" : "child";
+                const emAtraso = verificarAtraso(tarefa);
+
+                $body.append(`
+                    <tr class="${classeLinha}" data-id="${tarefa.id}">
+                        <td class="text-center align-middle" style="width: 60px;">
+                            ${acoesHtml(tarefa)}
+                        </td>
+                        <td class="text-center text-secondary align-middle">${escaparHtml(tarefa.no)}</td>
+                        <td class="activity-cell align-middle">
+                            <div class="d-flex align-items-center gap-1">
+                                <input type="text" name="atividade" class="activity-input" data-field="name" data-id="${tarefa.id}" value="${escaparHtml(tarefa.name)}" ${isGroup ? 'style="font-weight:600"' : ""}>
+                                ${tarefa.critical ? '<i class="bi bi-exclamation-triangle-fill status-critical" data-bs-toggle="tooltip" data-bs-title="Crítico"></i>' : ""}
+                                ${emAtraso ? '<i class="bi bi-fire status-overdue" data-bs-toggle="tooltip" data-bs-title="Atrasado"></i>' : ""}
+                            </div>
+                        </td>
+                        <td class="col-owner align-middle">
+                            ${isGroup ? "<span>—</span>" : `<select name="responsavel" class="owner-select" data-field="owner">${opcoesResponsavel(tarefa.owner)}</select>`}
+                        </td>
+                        <td class="col-planned align-middle">
+                            ${isGroup ? "<span>—</span>" : htmlIntervaloData(tarefa, "planned")}
+                        </td>
+                        <td class="col-real align-middle">
+                            ${isGroup ? "<span>—</span>" : htmlIntervaloData(tarefa, "real")}
+                        </td>
+                        <td class="col-predecessors align-middle">
+                            ${isGroup ? "<span>—</span>" : `<select name="predecessoras" class="pred-select" data-field="pred">${opcoesPredecessora(tarefa.pred)}</select>`}
+                        </td>
+                        <td class="col-progress align-middle">
+                            ${isGroup ? "<span>—</span>" : `<input type="number" name="percentual" min="0" max="100" class="progress-input" data-field="progress" value="${tarefa.progress ?? 0}">`}
+                        </td>
+                    </tr>
+                `);
+            });
+
+            atualizarVisibilidadeColunas();
+        }
+
+        function renderizarDireita() {
+            const p = periodos();
+            const totalWidth = p.arr.length * p.cfg.width;
+
+            let headerHtml = `<div class="timeline-header d-flex" style="width:${totalWidth}px;">`;
+            p.arr.forEach((per) => {
+                headerHtml += `<div class="period-label" style="width:${p.cfg.width}px; flex: 0 0 ${p.cfg.width}px;">${per.label}</div>`;
+            });
+            headerHtml += `</div>`;
+            $("#timelineHeader").html(headerHtml);
+
+            const $body =$("#timelineBody").empty().css("width", `${totalWidth}px`);
+
+            estado.tasks.forEach((tarefa) => {
+                const $row =$(`<div class="timeline-row ${tarefa.group ? "group" : ""}" style="width:${totalWidth}px;"></div>`);
+
+                const posHoje = posicaoParaData(paraISO(new Date()));
+                if (posHoje > 0 && posHoje < totalWidth) {
+                    $row.append(`<div class="today-line" style="left:${posHoje}px;"></div>`);
+                }
+
+                const baselineDates = compararLinhaBase ? (tarefa.baseline || tarefa.planned) : tarefa.planned;
+                if (baselineDates && baselineDates[0] && baselineDates[1]) {
+                    const leftBase = posicaoParaData(baselineDates[0]);
+                    const widthBase = larguraParaIntervalo(baselineDates[0], baselineDates[1]);
+                    const dtInicioBR = formatarDataBR(baselineDates[0]);
+                    const dtFimBR = formatarDataBR(baselineDates[1]);
+
+                    $row.append(`
+                        <div
+                            class="bar baseline-bar"
+                            style="left:${leftBase}px; width:${widthBase}px;"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="Linha de Base: ${dtInicioBR} a ${dtFimBR}"
+                        ></div>
+                    `);
+                }
+
+                const usaReal = Boolean(tarefa.real && tarefa.real[0]);
+                const dataInicioBarra = usaReal ? tarefa.real[0] : tarefa.planned?.[0];
+
+                let dataFimBarra = usaReal ? tarefa.real[1] : tarefa.planned?.[1];
+                if (usaReal && !dataFimBarra) {
+                    dataFimBarra = paraISO(new Date());
+                }
+
+                if (dataInicioBarra && dataFimBarra) {
+                    const left = posicaoParaData(dataInicioBarra);
+                    const width = larguraParaIntervalo(dataInicioBarra, dataFimBarra);
+                    const emAtraso = verificarAtraso(tarefa);
+
+                    let barClass = "bar task-bar";
+                    if (tarefa.group) barClass = "bar group-bar";
+                    if (emAtraso) barClass += " overdue";
+                    else if (tarefa.critical) barClass += " critical";
+
+                    const pct = Math.min(100, Math.max(0, tarefa.progress ?? 0));
+                    const fillHtml = !tarefa.group ? `<div class="progress-fill" style="width:${pct}%;"></div>` : "";
+
+                    const dtInicioBR = formatarDataBR(dataInicioBarra);
+                    const dtFimBR = formatarDataBR(dataFimBarra);
+
+                    $row.append(`
+                        <div
+                            class="${barClass}"
+                            style="left:${left}px; width:${width}px;"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="${escaparHtml(tarefa.name)} (${pct}%) - ${dtInicioBR} a ${dtFimBR}"
+                        >
+                            ${fillHtml}
+                        </div>
+                    `);
+                }
+
+                $body.append($row);
+            });
+        }
+
+        function renderizar() {
+            // 1. Destruir as instâncias de tooltips existentes ANTES de apagar os elementos do DOM
+            $('[data-bs-toggle="tooltip"]').tooltip("dispose");
+
+            // 2. Limpar os containers
+            $("#leftBody").empty();
+            $("#rightBody").empty();
+
+            // 3. Processar regras e renderizar o HTML
+            recalcularNumeracao();
+            renderizarEsquerda();
+            renderizarDireita();
+
+            // 4. Inicializar os novos tooltips
+            if (typeof inicializarTooltips === "function") {
+                inicializarTooltips();
+            } else {
+                $('[data-bs-toggle="tooltip"]').tooltip();
+            }
+        }
+
+        function atualizarVisibilidadeColunas() {
+            $(".column-toggle").each(function () {
+                const colName = $(this).val();
+                const visible = $(this).is(":checked");
+                $(`.col-${colName}`).toggle(visible);
+            });
+        }
+
+        // EVENTOS
+        // 1. Atualização em tempo real do texto da atividade e progresso
+        $(document).on("input", ".activity-input, .progress-input", function () {
+            const $row = $(this).closest("tr");
+            const id = Number($row.data("id"));
+            const task = estado.tasks.find((t) => t.id === id);
+            if (!task) return;
+
+            const field = $(this).data("field");
+            if (field === "progress") {
+                task.progress = Number($(this).val());
+            } else {
+                task[field] = $(this).val();
+            }
+        });
+
+        // EVENTOS
+        // Helper para persistir o estado no objeto em JS
+        function salvarValorNoEstado(inputEl) {
+            const $input = $(inputEl);
+            const $row = $input.closest("tr");
+            const id = Number($row.data("id"));
+            const task = estado.tasks.find((t) => t.id === id);
+            if (!task) return null;
+
+            const field = $input.data("field");
+            const val = $input.val();
+
+            if (field === "planned" || field === "real") {
+                const index = Number($input.data("index"));
+                if (!task[field]) task[field] = ["", ""];
+                task[field][index] = val;
+            } else if (field === "progress") {
+                task.progress = Number(val);
+            } else {
+                task[field] = val;
+            }
+
+            return { task, val };
+        }
+
+        // 1. Atualização em tempo real do texto da atividade e progresso
+        $(document).on("input", ".activity-input, .progress-input", function () {
+            salvarValorNoEstado(this);
+        });
+
+        // 2. Selects e inputs padrão (re-renderiza ao alterar)
+        $(document).on("change", ".owner-select, .pred-select", function () {
+            salvarValorNoEstado(this);
+            renderizar();
+        });
+
+        // 3. Atualização contínua do objeto enquanto digita no campo de data
+        $(document).on("input", ".date-input", function () {
+            salvarValorNoEstado(this);
+        });
+
+        // 4. Re-renderiza a tabela apenas ao selecionar uma data válida no calendário (evento change)
+        $(document).on("change", ".date-input", function () {
+            const res = salvarValorNoEstado(this);
+            if (!res) return;
+
+            const val = res.val;
+
+            // Se o campo for limpo
+            if (!val) {
+                renderizar();
+                return;
+            }
+
+            // Garante que o ano possui 4 dígitos completos antes de recriar a DOM
+            const partes = val.split("-");
+            if (partes.length === 3 && partes[0].length === 4) {
+                renderizar();
+            }
+        });
+
+        $(".view-switch button").on("click", function () {
+            $(".view-switch button").removeClass("active");
+            $(this).addClass("active");
+            escalaAtual = $(this).data("scale");
+            renderizar();
+        });
+
+        if (!estado.baselines) {
+            estado.baselines = [];
+        }
+
+        $('[data-gantt-btn="saveBeseline"]').on("click", function () {
+            estado.tasks.forEach((t) => {
+                t.baseline = [...(t.planned || ["", ""])];
+            });
+
+            const numeroVersao = estado.baselines.length + 1;
+            const dataHoje = new Date().toLocaleDateString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric"
+            });
+
+            const registro = {
+                versao: numeroVersao,
+                data: dataHoje,
+                texto: `Linha de base ${numeroVersao} salva em ${dataHoje}`,
+                tasks: JSON.parse(JSON.stringify(estado.tasks))
+            };
+
+            estado.baselines.push(registro);
+
+            const $lista =$("#listaBaselines").empty();
+            estado.baselines.forEach((b) => {
+                $lista.append(`
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span><i class="bi bi-bookmark-check-fill text-success me-2"></i>${escaparHtml(b.texto)}</span>
+                    </li>
+                `);
+            });
+
+            renderizar();
+
+            const modal = new bootstrap.Modal(document.getElementById("modalBaseline"));
+            modal.show();
+        });
+
+        $('[data-gantt-btn="compare"]').on("click", function () {
+            if (!estado.baselines || estado.baselines.length === 0) {
+                alert("Nenhuma linha de base foi salva ainda.");
+                return;
+            }
+
+            window.dadosComparacaoGantt = {
+                titulo: estado.titulo || "Sua Estrutura Analítica do Projeto (EAP)",
+                baselines: estado.baselines,
+                tasksAtuais: JSON.parse(JSON.stringify(estado.tasks))
+            };
+
+            $.magnificPopup.open({
+                items: {
+                    src: '/popups/compara-linha-base'
+                },
+                type: 'iframe',
+                iframe: {
+                    markup: '<div class="mfp-iframe-scaler" style="padding-top: 80vh;">' +
+                            '<div class="mfp-close"></div>' +
+                            '<iframe class="mfp-iframe" frameborder="0" allowfullscreen></iframe>' +
+                            '</div>'
+                }
+            });
+        });
+
+        $(".column-toggle").on("change", function () {
+            atualizarVisibilidadeColunas();
+        });
+
+        // Rola 300px para a esquerda
+        $('[data-gantt-btn="prev"]').on("click", function () {
+            const $container = $("#rightScroll");
+            $container.animate({
+                scrollLeft: $container.scrollLeft() - 300
+            }, 200);
+        });
+        // Rola 300px para a direita
+        $('[data-gantt-btn="next"]').on("click", function () {
+            const $container = $("#rightScroll");
+            $container.animate({
+                scrollLeft: $container.scrollLeft() + 300
+            }, 200);
+        });
+
+        $("#rightScroll").on("scroll", function () {
+            const $container = $(this);
+            const scrollLeft = $container.scrollLeft();
+            const maxScroll = $container[0].scrollWidth - $container.outerWidth();
+
+            // Desativa 'prev' se estiver no início
+            $('[data-gantt-btn="prev"]').prop("disabled", scrollLeft <= 0);
+
+            // Desativa 'next' se atingir o fim
+            $('[data-gantt-btn="next"]').prop("disabled", scrollLeft >= maxScroll - 1);
+        });
+
+        $(document).on("click", '[data-gantt-btn="addAtividade"]', function () {
+            proximoId++;
+            const novaTarefa = {
+                id: proximoId,
+                no: "",
+                name: "Nova Atividade",
+                owner: "",
+                planned: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
+                baseline: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
+                real: ["", ""],
+                pred: "",
+                progress: 0,
+                group: true,
+            };
+
+            estado.tasks.push(novaTarefa);
+
+            reordenarNumeracao();
+            renderizar();
+
+            // Procura o input do nome da nova tarefa recém-renderizada pelo ID ou atributo data
+            const $novoInput =$(`input[data-id="${proximoId}"][data-field="name"]`); // Ajuste o seletor para o seu input de nome
+
+            if ($novoInput.length) {
+                // 1. Rola o container/janela de forma suave até o novo input
+                $novoInput[0].scrollIntoView({ behavior: "smooth", block: "center" });
+
+                // 2. Coloca o foco no input e seleciona o texto "Nova Atividade" para facilitar a edição rápida
+                setTimeout(() => {
+                    $novoInput.trigger("focus").select();
+                }, 150); // O pequeno timeout garante o alinhamento com a rolagem
+            }
+        });
+
+        // ADICIONAR SUBTAREFA (Apenas nos Títulos de Grupo)
+        $(document).on("click", '[data-btn="addSubTarefa"]', function () {
+            const id = Number($(this).data("id"));
+            const indexPai = estado.tasks.findIndex((t) => t.id === id);
+            if (indexPai === -1) return;
+
+            // Procura o fim do grupo atual (próximo item com group: true ou fim da lista)
+            let indexInserção = indexPai + 1;
+            while (indexInserção < estado.tasks.length && !estado.tasks[indexInserção].group) {
+                indexInserção++;
+            }
+
+            proximoId++;
+            const novaSubtarefa = {
+                id: proximoId,
+                no: "",
+                name: "Nova Subtarefa",
+                owner: "",
+                planned: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
+                baseline: [paraISO(new Date()), paraISO(adicionarDias(new Date(), 15))],
+                real: ["", ""],
+                pred: "",
+                progress: 0,
+                group: false
+            };
+
+            // Insere no final do grupo correspondente
+            estado.tasks.splice(indexInserção, 0, novaSubtarefa);
+            renderizar();
+        });
+
+        // REQUISIÇÃO DE EXCLUSÃO (ABRE O MODAL)
+        $(document).on("click", '[data-btn="delSubTarefa"]', function () {
+            const id = Number($(this).data("id"));
+            const task = estado.tasks.find((t) => t.id === id);
+            if (!task) return;
+
+            idParaExcluir = id;
+
+            // Elementos internos do include do modal
+            const $modalTitle = $("#deleteActivityModalLabel");
+            const $iconContainer = $("#deleteActivityModal .delete-modal-icon");
+            const $taskName = $("#deleteActivityName");
+            const $msgText = $("#deleteActivityModal .text-secondary");
+
+            $taskName.text(task.name);
+
+            if (task.group) {
+                // Estilo e mensagem diferenciada para GRUPOS
+                $modalTitle.text("Excluir grupo");
+                $iconContainer.html('<i class="bi bi-exclamation-triangle-fill text-danger fs-1"></i>');
+                $msgText
+                    .removeClass("text-secondary")
+                    .addClass("text-danger fw-semibold")
+                    .text("Atenção: Ao excluir este grupo, TODAS as subtarefas vinculadas a ele também serão excluídas!");
+            } else {
+                // Estilo padrão para SUBTAREFAS
+                $modalTitle.text("Excluir atividade");
+                $iconContainer.html('<i class="bi bi-trash3 fs-1"></i>');
+                $msgText
+                    .removeClass("text-danger fw-semibold")
+                    .addClass("text-secondary")
+                    .text("Tem certeza que deseja excluir esta atividade?");
+            }
+
+            const deleteModalElem = document.getElementById("deleteActivityModal");
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(deleteModalElem);
+            modalInstance.show();
+        });
+
+        $("#btnConfirmDelete").on("click", function () {
+            if (!idParaExcluir) return;
+
+            const index = estado.tasks.findIndex((t) => t.id === idParaExcluir);
+            if (index === -1) return;
+
+            const task = estado.tasks[index];
+
+            if (task.group) {
+                // Remove o grupo e todas as subtarefas filhas sequenciais
+                let qtdParaRemover = 1;
+                while (
+                    index + qtdParaRemover < estado.tasks.length &&
+                    !estado.tasks[index + qtdParaRemover].group
+                ) {
+                    qtdParaRemover++;
+                }
+                estado.tasks.splice(index, qtdParaRemover);
+            } else {
+                // Remove apenas a subtarefa
+                estado.tasks.splice(index, 1);
+            }
+
+            // Recalcula o 'no' (1, 1.1, 1.2, 2...)
+            reordenarNumeracao();
+
+            // Fecha o modal
+            const deleteModalElem = document.getElementById("deleteActivityModal");
+            const modalInstance = bootstrap.Modal.getInstance(deleteModalElem);
+            if (modalInstance) modalInstance.hide();
+
+            idParaExcluir = null;
+            renderizar();
+        });
+
+        $("#leftScroll").on("scroll", function () {
+            $("#rightScroll").scrollTop($(this).scrollTop());
+        });
+
+        $("#rightScroll").on("scroll", function () {
+            $("#leftScroll").scrollTop($(this).scrollTop());
+            $("#rightHeaderScroll").scrollLeft($(this).scrollLeft());
+        });
+
+        renderizar();
+    });
+</script>

@@ -45,14 +45,28 @@ Aplicação web moderna, interativa e responsiva para gerenciamento de projetos 
 
 ```text
 /
+├──puplic/
+│   │  data/
+│   │   ├── estado.js
+│   │   ├── responsaveis.js
+│   ├── gantt/
+│   │   ├── gantt.js
+│   │   ├── ganttLeft.js
+│   │   ├── ganttRight.js
+│   │   ├── ganttTaskServices.js
+│   │   ├── ganttUtils.js
+│   │   └──
+│   ├── js/
+│      └── main.js
+│
 ├── src/
 │   ├── layouts/
-│   │   └── Layout.astro         # Layout base (Bootstrap, fontes, CSS global e tooltips)
+│   │   └── Layout.astro    # Layout base (Bootstrap, Bootstrap Icons, Jquery, Assets e Fontes)
 │   ├── pages/
-│   │   ├── index.astro          # Página principal e toolbar
-│   │   ├── _scripts.astro       # Lógica JavaScript/jQuery de dados e timeline
-│   │   └── _modal.astro         # Modal de confirmação de exclusão
-│   └── styles.css               # Estilização completa do Gantt e timeline
+│   │   ├── index.astro     # Página principal e toolbar
+│   │   ├── /popups         # Página de Caparar beseline
+│   │   └── /modals         # Modal de confirmação de exclusão
+│   └── styles.css          # Estilização completa do Gantt e timeline
 ├── package.json
 └── README.md
 ```
