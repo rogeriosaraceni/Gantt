@@ -1,46 +1,113 @@
-# Astro Starter Kit: Basics
+# 📊 Gráfico de Gantt Interativo
 
-```sh
-npm create astro@latest -- --template basics
-```
+Aplicação web moderna, interativa e responsiva para gerenciamento de projetos e cronogramas utilizando **Gráfico de Gantt**, construída com **Astro**, **Bootstrap 5** e **jQuery**.
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+---
 
-## 🚀 Project Structure
+## ✨ Funcionalidades
 
-Inside of your Astro project, you'll see the following folders and files:
+### 📋 Painel de Atividades (Tabela à Esquerda)
+- **Hierarquia e Numeração Automática:** Suporte a grupos (ex: `1`, `2`) e subtarefas filhas (ex: `1.1`, `2.1`), com renumeração automática ao adicionar ou excluir itens.
+- **Edição Inline Direta:** Edite títulos, responsáveis, datas de início/fim (planejadas e reais), predecessoras e percentual de progresso diretamente nas células.
+- **Indicadores de Status:** Ícones visuais para atividades em estado **Crítico** ou **Atrasado**.
+- **Gerenciador de Colunas:** Menu dropdown para ocultar ou exibir colunas sob demanda (*Responsável*, *Planejado*, *Real*, *Predecessoras* e *%*).
+- **Exclusão Segura:** Modal de confirmação via Bootstrap com tooltips integrados.
+- **Inclusão Dinâmica:** Adicione novas atividades com foco automático imediato na edição.
+
+### ⏱️ Linha do Tempo / Timeline (Painel à Direita)
+- **Escalas Temporais Dinâmicas:** Alterne a visualização entre **Semana** (`Sem. S/AA`), **Mês** (`Mês/AA`) e **Ano** (`AAAA`).
+- **Barras de Tarefas Proporcionais:** Cálculo exato de posição e largura baseado nas datas, com preenchimento visual proporcional ao progresso (`%`).
+- **Linha de Base (*Baseline*):**
+  - Salve o snapshot do cronograma planejado atual.
+  - Ative a comparação para visualizar a barra de baseline sobreposta às datas reais/planejadas.
+- **Navegação Horizontal Rápida:** Botões de navegação anterior/próximo (`<` e `>`) para deslocar a linha do tempo suavemente.
+- **Tooltips do Bootstrap:** Informações contextuais detalhadas ao passar o mouse sobre as barras e ações.
+
+### 🎨 Experiência e Layout
+- **Cabeçalhos Fixos (*Sticky Headers*):** Cabeçalhos da tabela e da linha do tempo permanecem fixos no topo durante a rolagem vertical.
+- **Sincronização de Rolagem:** Sincronização vertical fluida entre a tabela de atividades e a grade temporal.
+- **Scrollbars Modernas e Finas:** Barras de rolagem estilizadas e compactas (6px) com trilho transparente.
+- **Paleta Neutra e Elegante:** Cores suaves inspiradas em design corporativo moderno.
+
+---
+
+## 🛠️ Tecnologias Utilizadas
+
+- **[Astro](https://astro.build/):** Framework web rápido e componentizado.
+- **[Bootstrap 5.3](https://getbootstrap.com/):** Componentes de interface, grid, dropdowns, modais e tooltips.
+- **[Bootstrap Icons](https://icons.getbootstrap.com/):** Iconografia do sistema.
+- **[jQuery 3.7](https://jquery.com/):** Manipulação de DOM, cálculos temporais e sincronização de eventos.
+- **CSS3 Moderno:** Variáveis CSS, `position: sticky`, `scrollbar-width` e pseudo-elementos WebKit.
+
+---
+
+## 📁 Estrutura do Projeto
 
 ```text
 /
-├── public/
-│   └── favicon.svg
-├── src
-│   ├── assets
-│   │   └── astro.svg
-│   ├── components
-│   │   └── Welcome.astro
-│   ├── layouts
-│   │   └── Layout.astro
-│   └── pages
-│       └── index.astro
-└── package.json
+├── src/
+│   ├── layouts/
+│   │   └── Layout.astro         # Layout base (Bootstrap, fontes, CSS global e tooltips)
+│   ├── pages/
+│   │   ├── index.astro          # Página principal e toolbar
+│   │   ├── _scripts.astro       # Lógica JavaScript/jQuery de dados e timeline
+│   │   └── _modal.astro         # Modal de confirmação de exclusão
+│   └── styles.css               # Estilização completa do Gantt e timeline
+├── package.json
+└── README.md
 ```
 
-To learn more about the folder structure of an Astro project, refer to [our guide on project structure](https://docs.astro.build/en/basics/project-structure/).
+---
 
-## 🧞 Commands
+## 🚀 Como Executar
 
-All commands are run from the root of the project, from a terminal:
+### Pré-requisitos
+- [Node.js](https://nodejs.org/) (versão `>= 22.12.0`)
+- Gerenciador de pacotes (`npm`, `pnpm` ou `yarn`)
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
+### Instalação
 
-## 👀 Want to learn more?
+```sh
+# Clone o repositório
+git clone https://github.com/rogeriosaraceni/Gantt.git
+cd Gantt
 
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+# Instale as dependências
+npm install
+```
+
+### Modo de Desenvolvimento
+
+```sh
+# Iniciar o servidor de desenvolvimento
+npm run dev
+```
+
+Acesse [http://localhost:4321](http://localhost:4321) no seu navegador.
+
+#### Executar em Segundo Plano (Opcional)
+```sh
+# Iniciar em background
+astro dev --background
+
+# Verificar status / logs / parar
+astro dev status
+astro dev logs
+astro dev stop
+```
+
+### Build para Produção
+
+```sh
+# Gerar arquivos estáticos otimizados para produção
+npm run build
+
+# Pré-visualizar a build de produção localmente
+npm run preview
+```
+
+---
+
+## 📝 Licença
+
+Este projeto está sob a licença [MIT](LICENSE).
