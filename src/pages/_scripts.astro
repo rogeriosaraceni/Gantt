@@ -460,11 +460,11 @@
 
                 $body.append(`
                     <tr class="${classeLinha}" data-id="${tarefa.id}">
-                        <td class="text-center align-middle" style="width: 80px;">
+                        <td class="text-center" style="width: 80px;">
                             ${acoesHtml(tarefa)}
                         </td>
-                        <td class="text-center text-secondary align-middle">${escaparHtml(tarefa.no)}</td>
-                        <td class="activity-cell align-middle">
+                        <td class="text-center text-secondary">${escaparHtml(tarefa.no)}</td>
+                        <td class="activity-cell">
                             <div class="d-flex align-items-center gap-1">
                                 <input type="text" name="atividade" class="activity-input" data-field="name" data-id="${tarefa.id}" value="${escaparHtml(tarefa.name)}" ${isGroup ? 'style="font-weight:600"' : ""}>
                                 ${tarefa.critical ? '<i class="bi bi-exclamation-triangle-fill status-critical" data-bs-toggle="tooltip" data-bs-title="Crítico"></i>' : ""}
@@ -472,19 +472,19 @@
                                 ${tarefa.reagendada ? '<i class="bi bi-arrow-repeat text-info" data-bs-toggle="tooltip" data-bs-title="Data ajustada pela predecessora"></i>' : ""}
                             </div>
                         </td>
-                        <td class="col-owner align-middle">
+                        <td class="col-owner">
                             ${isGroup ? "<span>—</span>" : `<select name="responsavel" class="owner-select" data-field="owner">${opcoesResponsavel(tarefa.owner)}</select>`}
                         </td>
-                        <td class="col-planned align-middle">
+                        <td class="col-planned text-center">
                             ${isGroup ? somenteLeitura(textoIntervalo(resumo.planned)) : htmlIntervaloData(tarefa, "planned")}
                         </td>
-                        <td class="col-real align-middle">
+                        <td class="col-real text-center">
                             ${isGroup ? somenteLeitura(textoIntervalo(resumo.real, resumo.realAberto)) : htmlIntervaloData(tarefa, "real")}
                         </td>
-                        <td class="col-predecessors align-middle">
+                        <td class="col-predecessors">
                             ${isGroup ? "<span>—</span>" : `<select name="predecessoras" class="pred-select" data-field="pred" multiple>${opcoesPredecessora(tarefa)}</select>`}
                         </td>
-                        <td class="col-progress align-middle">
+                        <td class="col-progress">
                             ${isGroup ? somenteLeitura(`${resumo.progress}%`) : `<input type="number" name="percentual" min="0" max="100" class="progress-input" data-field="progress" value="${tarefa.progress ?? 0}">`}
                         </td>
                     </tr>
