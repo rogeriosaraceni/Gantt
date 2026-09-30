@@ -414,45 +414,36 @@
             ini ? `${formatarDataBR(ini)} — ${fim && !aberto ? formatarDataBR(fim) : "…"}` : "—";
 
 
-
-
-
-
-
         function acoesHtml(t) {
-            const btnAddHtml = t.group ? `
-                <li>
-                    <button type="button" class="dropdown-item" data-btn="addSubTarefa" data-id="${t.id}">
-                        <small class="d-flex align-items-center gap-2">
-                            <i class="bi bi-plus-lg text-primary"></i> Adicionar subtarefa
-                        </small>
-                    </button>
-                </li>
-            ` : "";
+            const proxima = estado.tasks[estado.tasks.indexOf(t) + 1];
+
+            // "+" só onde uma nova linha vai entrar: atividade sem tarefas ou última tarefa do grupo
+            const mostrarAdd = t.group ? !filhasDoGrupo(t).length : !proxima || proxima.group;
+
+            const botao = (acao, icone, cor, titulo) => `
+                <button
+                    type="button"
+                    class="btn btn-link ${cor} p-0 border-0"
+                    data-btn="${acao}"
+                    data-id="${t.id}"
+                    data-bs-toggle="tooltip"
+                    data-bs-container="body"
+                    data-bs-title="${titulo}"
+                    aria-label="${titulo}"
+                >
+                    <i class="bi ${icone} fs-6"></i>
+                </button>
+            `;
 
             return `
-                <div class="dropdown text-center">
-                    <button
-                        class="btn btn-link text-secondary p-0 border-0"
-                        type="button"
-                        data-bs-toggle="dropdown"
-                        aria-expanded="false"
-                        data-bs-title="Ações"
-                        data-bs-toggle-tooltip="tooltip"
-                    >
-                        <i class="bi bi-three-dots-vertical fs-6"></i>
-                    </button>
+                <div class="d-flex justify-content-center align-items-center gap-2">
+                    <div class="actions-icons">
+                        ${botao("delSubTarefa", "bi-trash", "text-danger", t.group ? "Excluir atividade" : "Excluir tarefa")}
+                    </div>
 
-                    <ul class="dropdown-menu dropdown-menu-start shadow-sm p-0 overflow-hidden">
-                        ${btnAddHtml}
-                        <li>
-                            <button type="button" class="dropdown-item text-danger" data-btn="delSubTarefa" data-id="${t.id}">
-                                <small class="d-flex align-items-center gap-2">
-                                    <i class="bi bi-trash"></i> Excluir
-                                </small>
-                            </button>
-                        </li>
-                    </ul>
+                    <div class="actions-icons">
+                        ${mostrarAdd ? botao("addSubTarefa", "bi-plus-lg", "text-primary", "Adicionar tarefa") : ""}
+                    </div>
                 </div>
             `;
         }
@@ -469,7 +460,7 @@
 
                 $body.append(`
                     <tr class="${classeLinha}" data-id="${tarefa.id}">
-                        <td class="text-center align-middle" style="width: 60px;">
+                        <td class="text-center align-middle" style="width: 80px;">
                             ${acoesHtml(tarefa)}
                         </td>
                         <td class="text-center text-secondary align-middle">${escaparHtml(tarefa.no)}</td>
@@ -660,6 +651,7 @@
             // 1. Destrói tooltips e multipleSelect ANTES de apagar o DOM
             //    (com container: 'body' o dropdown fica solto no body e ficaria órfão)
             $('[data-bs-toggle="tooltip"]').tooltip("dispose");
+            $('.tooltip').remove(); // opcional
             $(".pred-select").multipleSelect("destroy");
 
             // 2. Limpa os containers
@@ -677,6 +669,10 @@
             } else {
                 $('[data-bs-toggle="tooltip"]').tooltip();
             }
+
+            // Re-inicializa todos os tooltips dos novos elementos gerados
+            const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+            [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
 
             iniciarPredecessoras();
         }
@@ -858,14 +854,13 @@
             }
         });
 
-        // ADICIONAR SUBTAREFA (apenas nos títulos de grupo)
+        // ADICIONAR TAREFA: "+" da atividade sem tarefas ou da última tarefa do grupo.
+        // Nos dois casos a nova linha entra no fim do grupo.
         $(document).on("click", '[data-btn="addSubTarefa"]', function () {
-            const id = Number($(this).data("id"));
-            const indexPai = estado.tasks.findIndex((t) => t.id === id);
-            if (indexPai === -1) return;
+            const indexOrigem = estado.tasks.findIndex((t) => t.id === Number($(this).data("id")));
+            if (indexOrigem === -1) return;
 
-            // Procura o fim do grupo atual (próximo item com group: true ou fim da lista)
-            let indexInsercao = indexPai + 1;
+            let indexInsercao = indexOrigem + 1;
             while (indexInsercao < estado.tasks.length && !estado.tasks[indexInsercao].group) {
                 indexInsercao++;
             }
@@ -874,7 +869,7 @@
             estado.tasks.splice(indexInsercao, 0, {
                 id: proximoId,
                 no: "",
-                name: "Nova Subtarefa",
+                name: "Nova tarefa",
                 owner: "",
                 planned: ["", ""],
                 baseline: ["", ""],
@@ -885,6 +880,14 @@
             });
 
             renderizar();
+
+            // Rola até a nova linha e seleciona o nome para edição rápida
+            const $novoInput = $(`input[data-id="${proximoId}"][data-field="name"]`);
+
+            if ($novoInput.length) {
+                $novoInput[0].scrollIntoView({ behavior: "smooth", block: "center" });
+                setTimeout(() => $novoInput.trigger("focus").select(), 150);
+            }
         });
 
         // REQUISIÇÃO DE EXCLUSÃO (abre o modal)
