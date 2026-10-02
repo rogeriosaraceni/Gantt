@@ -189,12 +189,152 @@ $(function () {
         const dataFimPlan = analisarData(tarefa.planned?.[1]);
         const dataFimReal = analisarData(tarefa.real?.[1]);
         const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
 
         if (!dataFimPlan) return false;
         if (dataFimReal && dataFimReal > dataFimPlan) return true;
         if (!dataFimReal && tarefa.real?.[0] && hoje > dataFimPlan && (tarefa.progress ?? 0) < 100) return true;
 
         return false;
+    }
+
+    // ---------------------------------------------------------------
+    // CÁLCULO DO CAMINHO CRÍTICO (CPM - Critical Path Method)
+    // ---------------------------------------------------------------
+    // Identifica todas as tarefas cuja folga total é zero (qualquer atraso
+    // nestas tarefas impacta diretamente a data final do projeto).
+    function calcularCaminhoCritico() {
+        // 1. Resetar flag critical de todas as tarefas
+        estado.tasks.forEach((t) => (t.critical = false));
+
+        // 2. Filtrar tarefas filhas que possuem datas planejadas válidas
+        const tarefasValidas = estado.tasks.filter(
+            (t) => !t.group && t.planned?.[0] && t.planned?.[1] && analisarData(t.planned[0]) && analisarData(t.planned[1])
+        );
+
+        if (!tarefasValidas.length) return;
+
+        // Mapear dados para CPM (Early Start, Early Finish, Late Start, Late Finish)
+        const mapa = new Map();
+        tarefasValidas.forEach((t) => {
+            const dIni = analisarData(t.planned[0]);
+            const dFim = analisarData(t.planned[1]);
+            const duracao = Math.max(1, diferencaDias(dIni, dFim) + 1);
+
+            mapa.set(t.id, {
+                task: t,
+                dIni: dIni,
+                dFim: dFim,
+                duracao: duracao,
+                es: new Date(dIni),
+                ef: new Date(dFim),
+                ls: null,
+                lf: null,
+                pred: (t.pred || []).filter((pid) => tarefasValidas.some((v) => v.id === pid)),
+                succ: []
+            });
+        });
+
+        // Preencher sucessoras
+        mapa.forEach((item, id) => {
+            item.pred.forEach((pid) => {
+                if (mapa.has(pid)) {
+                    mapa.get(pid).succ.push(id);
+                }
+            });
+        });
+
+        // Forward Pass (Ida): calcula os Early Finish considerando dependências
+        for (let passo = 0; passo < tarefasValidas.length; passo++) {
+            let mudou = false;
+            mapa.forEach((item) => {
+                let maxPredEF = null;
+                item.pred.forEach((pid) => {
+                    const predItem = mapa.get(pid);
+                    if (predItem && predItem.ef) {
+                        if (!maxPredEF || predItem.ef > maxPredEF) {
+                            maxPredEF = predItem.ef;
+                        }
+                    }
+                });
+
+                if (maxPredEF) {
+                    const esMinimo = adicionarDias(maxPredEF, 1);
+                    const novoES = esMinimo > item.dIni ? esMinimo : item.dIni;
+                    const novoEF = adicionarDias(novoES, item.duracao - 1);
+                    if (novoES.getTime() !== item.es.getTime() || novoEF.getTime() !== item.ef.getTime()) {
+                        item.es = novoES;
+                        item.ef = novoEF;
+                        mudou = true;
+                    }
+                }
+            });
+            if (!mudou) break;
+        }
+
+        // Determinar a data final do projeto (maior EF entre todas as tarefas)
+        let maxProjectEF = null;
+        mapa.forEach((item) => {
+            if (!maxProjectEF || item.ef > maxProjectEF) {
+                maxProjectEF = new Date(item.ef);
+            }
+        });
+
+        if (!maxProjectEF) return;
+
+        // Backward Pass (Volta): inicializa tarefas terminais com LF = maxProjectEF
+        mapa.forEach((item) => {
+            if (item.succ.length === 0) {
+                item.lf = new Date(maxProjectEF);
+                item.ls = adicionarDias(item.lf, -(item.duracao - 1));
+            }
+        });
+
+        // Backward Pass (Volta): propaga para as predecessoras
+        for (let passo = 0; passo < tarefasValidas.length; passo++) {
+            let mudou = false;
+            mapa.forEach((item) => {
+                if (item.succ.length > 0) {
+                    let minSuccLS = null;
+                    item.succ.forEach((sid) => {
+                        const succItem = mapa.get(sid);
+                        if (succItem && succItem.ls) {
+                            if (!minSuccLS || succItem.ls < minSuccLS) {
+                                minSuccLS = succItem.ls;
+                            }
+                        }
+                    });
+
+                    if (minSuccLS) {
+                        const novoLF = adicionarDias(minSuccLS, -1);
+                        const novoLS = adicionarDias(novoLF, -(item.duracao - 1));
+                        if (!item.lf || novoLF.getTime() !== item.lf.getTime() || novoLS.getTime() !== item.ls.getTime()) {
+                            item.lf = novoLF;
+                            item.ls = novoLS;
+                            mudou = true;
+                        }
+                    }
+                }
+            });
+            if (!mudou) break;
+        }
+
+        // Identificar Folga Total (Total Float <= 0) -> Caminho Crítico
+        mapa.forEach((item) => {
+            if (item.lf && item.ef) {
+                const folgaTotal = diferencaDias(item.ef, item.lf);
+                if (folgaTotal <= 0) {
+                    item.task.critical = true;
+                }
+            }
+        });
+
+        // Atualizar grupos: grupo é crítico se qualquer filha for crítica
+        estado.tasks.forEach((t) => {
+            if (t.group) {
+                t.critical = filhasDoGrupo(t).some((f) => f.critical);
+            }
+        });
     }
 
     // ---------------------------------------------------------------
@@ -511,6 +651,10 @@ $(function () {
             const isGroup = tarefa.group;
             const classeLinha = isGroup ? "group-row" : "child";
             const emAtraso = verificarAtraso(tarefa);
+            const criticoAtrasado = isGroup
+                ? filhasDoGrupo(tarefa).some((f) => verificarAtraso(f) && f.critical)
+                : emAtraso && tarefa.critical;
+            const atrasadoNormal = emAtraso && !criticoAtrasado;
             const resumo = isGroup ? resumoGrupo(tarefa) : null;
             const somenteLeitura = (texto) => `<span class="small text-secondary">${texto}</span>`;
 
@@ -523,8 +667,8 @@ $(function () {
                     <td class="activity-cell">
                         <div class="d-flex align-items-center gap-1">
                             <input type="text" name="atividade" class="activity-input" data-field="name" data-id="${tarefa.id}" value="${escaparHtml(tarefa.name)}" ${isGroup ? 'style="font-weight:600"' : ""}>
-                            ${tarefa.critical ? '<i class="bi bi-exclamation-triangle-fill status-critical" data-bs-toggle="tooltip" data-bs-title="Crítico"></i>' : ""}
-                            ${emAtraso ? '<i class="bi bi-fire status-overdue" data-bs-toggle="tooltip" data-bs-title="Atrasado"></i>' : ""}
+                            ${criticoAtrasado ? '<i class="bi bi-exclamation-triangle-fill status-critical" data-bs-toggle="tooltip" data-bs-title="Caminho Crítico"></i>' : ""}
+                            ${atrasadoNormal ? '<i class="bi bi-fire status-overdue" data-bs-toggle="tooltip" data-bs-title="Real Atrasado"></i>' : ""}
                             ${tarefa.reagendada ? '<i class="bi bi-arrow-repeat text-info" data-bs-toggle="tooltip" data-bs-title="Data ajustada pela predecessora"></i>' : ""}
                         </div>
                     </td>
@@ -641,10 +785,13 @@ $(function () {
             if (dataInicioBarra) {
                 const dataFimBarra = datasReal[1] || paraISO(new Date());
                 const emAtraso = verificarAtraso(tarefa);
+                const criticoAtrasado = tarefa.group
+                    ? filhasDoGrupo(tarefa).some((f) => verificarAtraso(f) && f.critical)
+                    : emAtraso && tarefa.critical;
 
                 let barClass = tarefa.group ? "bar group-bar" : "bar task-bar";
-                if (emAtraso) barClass += " overdue";
-                else if (tarefa.critical) barClass += " critical";
+                if (criticoAtrasado) barClass += " critical";
+                else if (emAtraso) barClass += " overdue";
 
                 const pct = Math.min(100, Math.max(0, resumo ? resumo.progress : (tarefa.progress ?? 0)));
                 const sufixo = `${tarefa.group ? " (consolidado)" : ""} (${pct}%) - ${formatarDataBR(dataInicioBarra)} a ${formatarDataBR(dataFimBarra)}`;
@@ -716,6 +863,7 @@ $(function () {
 
         // 3. Processa regras e renderiza o HTML
         recalcularNumeracao();
+        calcularCaminhoCritico();
         renderizarEsquerda();
         renderizarDireita();
 
