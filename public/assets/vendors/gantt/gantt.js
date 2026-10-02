@@ -21,7 +21,7 @@ $(function () {
         "Marcos Lima",
         "Beatriz Nunes",
         "Rafael Costa",
-        "Patrícia Gomes",
+        "Patrícia Gomes"
     ];
 
     let escalaAtual = "month";
@@ -800,8 +800,10 @@ $(function () {
         $("#modalAjusteTextoDependentes").text(textoDep);
 
         const modalEl = document.getElementById("modalConfirmarAjuste");
-        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-        modal.show();
+        if (modalEl) {
+            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+            modal.show();
+        }
     }
 
     // ---------------------------------------------------------------
@@ -1070,12 +1072,24 @@ $(function () {
         });
     }
 
+    function inicializarTooltips() {
+        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => {
+            const inst = bootstrap.Tooltip.getInstance(el);
+            if (inst) inst.dispose();
+            new bootstrap.Tooltip(el);
+        });
+    }
+
     function renderizar() {
         periodosCache = null;
         predAberto = null;
 
-        $('[data-bs-toggle="tooltip"]').tooltip("dispose");
-        $('.tooltip').remove();$(".pred-select").multipleSelect("destroy");
+        $(".tooltip").remove();
+        $(".pred-select").each(function () {
+            if ($(this).data("multipleSelect")) {
+                $(this).multipleSelect("destroy");
+            }
+        });
 
         $("#leftBody").empty();
         $("#rightBody").empty();
@@ -1086,15 +1100,7 @@ $(function () {
         renderizarEsquerda();
         renderizarDireita();
 
-        if (typeof tooltipsBootstrap === "function") {
-            tooltipsBootstrap();
-        } else {
-            $('[data-bs-toggle="tooltip"]').tooltip();
-        }
-
-        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-        [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
-
+        inicializarTooltips();
         iniciarPredecessoras();
 
         if (focoGrupoId) {
@@ -1162,7 +1168,6 @@ $(function () {
         valorAnteriorInput = $(this).val();
     });
 
-    // Evento de alteração de data refatorado para evitar falsos positivos de atraso
     $(document).on("change", ".date-input", function () {
         const inputEl = this;
         const $input =$(inputEl);
@@ -1174,7 +1179,6 @@ $(function () {
         const val = $input.val().trim();
         if (val !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(val)) return;
 
-        // Se o valor não foi alterado em relação ao que já estava antes do foco, encerra
         if (val === valorAnteriorInput) return;
 
         const field = $input.data("field");
@@ -1202,7 +1206,6 @@ $(function () {
             diferencaDiasProjeto = diferencaDias(maxDataAntes, maxDataDepois);
         }
 
-        // Filtra apenas tarefas dependentes que REALMENTE sofreram alteração nas datas planejadas
         const dependentesRealmenteAfetadas = afetadas.filter((afetId) => {
             if (afetId === id) return false;
             const tOrig = estado.tasks.find((t) => t.id === afetId);
@@ -1260,8 +1263,10 @@ $(function () {
             acaoPendenteAjuste = null;
         }
         const modalEl = document.getElementById("modalConfirmarAjuste");
-        const modal = bootstrap.Modal.getInstance(modalEl);
-        if (modal) modal.hide();
+        if (modalEl) {
+            const modal = bootstrap.Modal.getInstance(modalEl);
+            if (modal) modal.hide();
+        }
     });
 
     $(document).on("click", "#btnCancelarAjusteData", function () {
@@ -1325,7 +1330,10 @@ $(function () {
                 .text("Tem certeza que deseja excluir esta atividade?");
         }
 
-        bootstrap.Modal.getOrCreateInstance(document.getElementById("deleteActivityModal")).show();
+        const modalEl = document.getElementById("deleteActivityModal");
+        if (modalEl) {
+            bootstrap.Modal.getOrCreateInstance(modalEl).show();
+        }
     });
 
     $("#btnConfirmDelete").on("click", function () {
@@ -1353,8 +1361,11 @@ $(function () {
 
         reordenarNumeracao();
 
-        const modalInstance = bootstrap.Modal.getInstance(document.getElementById("deleteActivityModal"));
-        if (modalInstance) modalInstance.hide();
+        const modalEl = document.getElementById("deleteActivityModal");
+        if (modalEl) {
+            const modalInstance = bootstrap.Modal.getInstance(modalEl);
+            if (modalInstance) modalInstance.hide();
+        }
 
         idParaExcluir = null;
         renderizar();
@@ -1418,7 +1429,10 @@ $(function () {
 
         renderizar();
 
-        new bootstrap.Modal(document.getElementById("modalBaseline")).show();
+        const modalEl = document.getElementById("modalBaseline");
+        if (modalEl) {
+            new bootstrap.Modal(modalEl).show();
+        }
     });
 
     $('[data-gantt-btn="compare"]').on("click", function () {

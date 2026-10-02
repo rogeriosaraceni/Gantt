@@ -33,7 +33,16 @@
 
                     <thead>
                         <tr>
-                            <th class="col-actions">Ações</th>
+                            <th class="col-actions">
+                                <button
+                                    id="btnExcluirSelecionados"
+                                    class="btn btn-dark d-inline-flex align-items-center gap-2"
+                                    disabled
+                                    onclick="excluirTarefasSelecionadas()"
+                                >
+                                    <i class="bi bi-trash"></i> Excluir
+                                </button>
+                            </th>
                             <th class="col-num">#</th>
                             <th class="col-activity">Atividade</th>
                             <th class="col-owner">Responsável</th>
