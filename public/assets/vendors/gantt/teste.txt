@@ -57,3 +57,106 @@ estado.tasks = [
         group: false
     }
 ];
+
+
+-------------------------------------------------------------------------------------------------------------
+
+
+3. Replanejamento automático: Atualmente, não está ocorrendo o recálculo automático das datas das atividades dependentes quando uma atividade sofre atraso real. O sistema deve realizar esse recálculo considerando como premissa a duração prevista da atividade, mantendo sua duração original e deslocando as atividades subsequentes conforme a dependência estabelecida.
+
+const estadoExemplo = {
+    tasks: [
+        {
+            id: 1,
+            no: "1.0",
+            name: "1. Planejamento & Arquitetura",
+            owner: "",
+            planned: ["2026-09-01", "2026-09-18"],
+            baseline: ["2026-09-01", "2026-09-15"],
+            real: ["2026-09-01", "2026-09-20"],
+            pred: [],
+            progress: 100,
+            group: true
+        },
+        {
+            id: 101,
+            no: "1.1",
+            name: "Levantamento de Requisitos",
+            owner: "Ana Paula Silva",
+            planned: ["2026-09-01", "2026-09-07"],
+            baseline: ["2026-09-01", "2026-09-07"],
+            real: ["2026-09-01", "2026-09-07"],
+            pred: [],
+            progress: 100,
+            group: false
+        },
+        {
+            id: 102,
+            no: "1.2",
+            name: "Arquitetura e Especificação",
+            owner: "Ricardo Alves",
+            planned: ["2026-09-08", "2026-09-15"],
+            baseline: ["2026-09-08", "2026-09-15"],
+            real: ["2026-09-08", "2026-09-20"], // Concluída com atraso real (20/09 vs 15/09)
+            pred: [101],
+            progress: 100,
+            group: false
+        },
+        {
+            id: 2,
+            no: "2.0",
+            name: "2. Desenvolvimento Front-end",
+            owner: "",
+            planned: ["2026-09-21", "2026-10-15"],
+            baseline: ["2026-09-16", "2026-10-05"],
+            real: ["2026-09-21", ""],
+            pred: [],
+            progress: 35,
+            group: true
+        },
+        {
+            id: 201,
+            no: "2.1",
+            name: "Setup do Layout e Componentes Base",
+            owner: "Juliana Martins",
+            planned: ["2026-09-21", "2026-09-28"], // Reagendada automaticamente para 21/09 por depender da 102 (término real 20/09)
+            baseline: ["2026-09-16", "2026-09-23"],
+            real: ["2026-09-21", "2026-09-28"],
+            pred: [102],
+            progress: 100,
+            group: false
+        },
+        {
+            id: 202,
+            no: "2.2",
+            name: "Integração das Regras do Gantt",
+            owner: "Thiago Souza",
+            planned: ["2026-09-29", "2026-10-01"], // Data planejada já venceu no calendário e a tarefa não foi finalizada
+            baseline: ["2026-09-24", "2026-09-26"],
+            real: ["2026-09-29", ""], // Em andamento sem data de término
+            pred: [201],
+            progress: 40,
+            group: false
+        },
+        {
+            id: 203,
+            no: "2.3",
+            name: "Homologação e Testes de Regressão",
+            owner: "Camila Ferreira",
+            planned: ["2026-10-02", "2026-10-10"],
+            baseline: ["2026-09-27", "2026-10-05"],
+            real: ["", ""],
+            pred: [202], // Depende da 202 (será empurrada se a 202 for ajustada)
+            progress: 0,
+            group: false
+        }
+    ],
+    baselines: [
+        {
+            versao: 1,
+            data: "15/09/2026",
+            texto: "Linha de base 1 salva em 15/09/2026",
+            tasks: []
+        }
+    ]
+};

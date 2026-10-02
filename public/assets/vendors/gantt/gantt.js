@@ -113,7 +113,6 @@ $(function () {
 
     const buscarTarefa = (id) => estado.tasks.find((t) => t.id === id);
 
-    // Filhas = tarefas logo abaixo do grupo, até o próximo grupo
     function filhasDoGrupo(grupo) {
         const filhas = [];
         for (let i = estado.tasks.indexOf(grupo) + 1; i < estado.tasks.length && !estado.tasks[i].group; i++) {
@@ -155,7 +154,6 @@ $(function () {
         });
     }
 
-    // Resumo do grupo: menor início, maior fim e progresso ponderado pela duração planejada
     function resumoGrupo(grupo) {
         const filhas = filhasDoGrupo(grupo);
         const hoje = paraISO(new Date());
@@ -183,6 +181,7 @@ $(function () {
         };
     }
 
+    // --- REQUISITO 2: VERIFICAÇÃO DE ATRASO CORRIGIDA ---
     function verificarAtraso(tarefa) {
         if (tarefa.group) return filhasDoGrupo(tarefa).some(verificarAtraso);
 
@@ -195,13 +194,13 @@ $(function () {
         const hoje = new Date();
         hoje.setHours(0, 0, 0, 0);
 
-        // Caso 2: Tarefa concluída com data final real posterior ao planejado
+        // Caso 2: Concluída com data final real posterior à planejada
         if (dataFimReal && dataFimReal > dataFimPlan) {
             return true;
         }
 
-        // Caso 1: Data planejada já passou e a tarefa NÃO foi concluída
-        // (Só é "não concluída" se NÃO tiver data real E o progresso for < 100%)
+        // Caso 1: Data final planejada já venceu e a tarefa NÃO foi concluída
+        // (Só é não concluída se NÃO tiver data real E o progresso for < 100%)
         const naoConcluida = progresso < 100 && !dataFimReal;
         if (hoje > dataFimPlan && naoConcluida) {
             return true;
@@ -213,20 +212,15 @@ $(function () {
     // ---------------------------------------------------------------
     // CÁLCULO DO CAMINHO CRÍTICO (CPM - Critical Path Method)
     // ---------------------------------------------------------------
-    // Identifica todas as tarefas cuja folga total é zero (qualquer atraso
-    // nestas tarefas impacta diretamente a data final do projeto).
     function calcularCaminhoCritico() {
-        // 1. Resetar flag critical de todas as tarefas
         estado.tasks.forEach((t) => (t.critical = false));
 
-        // 2. Filtrar tarefas filhas que possuem datas planejadas válidas
         const tarefasValidas = estado.tasks.filter(
             (t) => !t.group && t.planned?.[0] && t.planned?.[1] && analisarData(t.planned[0]) && analisarData(t.planned[1])
         );
 
         if (!tarefasValidas.length) return;
 
-        // Mapear dados para CPM (Early Start, Early Finish, Late Start, Late Finish)
         const mapa = new Map();
         tarefasValidas.forEach((t) => {
             const dIni = analisarData(t.planned[0]);
@@ -247,7 +241,6 @@ $(function () {
             });
         });
 
-        // Preencher sucessoras
         mapa.forEach((item, id) => {
             item.pred.forEach((pid) => {
                 if (mapa.has(pid)) {
@@ -256,7 +249,6 @@ $(function () {
             });
         });
 
-        // Forward Pass (Ida): calcula os Early Finish considerando dependências
         for (let passo = 0; passo < tarefasValidas.length; passo++) {
             let mudou = false;
             mapa.forEach((item) => {
@@ -284,7 +276,6 @@ $(function () {
             if (!mudou) break;
         }
 
-        // Determinar a data final do projeto (maior EF entre todas as tarefas)
         let maxProjectEF = null;
         mapa.forEach((item) => {
             if (!maxProjectEF || item.ef > maxProjectEF) {
@@ -294,7 +285,6 @@ $(function () {
 
         if (!maxProjectEF) return;
 
-        // Backward Pass (Volta): inicializa tarefas terminais com LF = maxProjectEF
         mapa.forEach((item) => {
             if (item.succ.length === 0) {
                 item.lf = new Date(maxProjectEF);
@@ -302,7 +292,6 @@ $(function () {
             }
         });
 
-        // Backward Pass (Volta): propaga para as predecessoras
         for (let passo = 0; passo < tarefasValidas.length; passo++) {
             let mudou = false;
             mapa.forEach((item) => {
@@ -331,7 +320,6 @@ $(function () {
             if (!mudou) break;
         }
 
-        // Identificar Folga Total (Total Float <= 0) -> Caminho Crítico
         mapa.forEach((item) => {
             if (item.lf && item.ef) {
                 const folgaTotal = diferencaDias(item.ef, item.lf);
@@ -341,7 +329,6 @@ $(function () {
             }
         });
 
-        // Atualizar grupos: grupo é crítico se qualquer filha for crítica
         estado.tasks.forEach((t) => {
             if (t.group) {
                 t.critical = filhasDoGrupo(t).some((f) => f.critical);
@@ -350,44 +337,63 @@ $(function () {
     }
 
     // ---------------------------------------------------------------
-    // DEPENDÊNCIAS E REAGENDAMENTO
+    // DEPENDÊNCIAS E REAGENDAMENTO AUTOMÁTICO (REQUISITO 3)
     // ---------------------------------------------------------------
 
-    // true se a tarefa idA depende (direta ou indiretamente) da tarefa idB
     function dependeDe(idA, idB, vistos = new Set()) {
         if (vistos.has(idA)) return false;
         vistos.add(idA);
         return (buscarTarefa(idA)?.pred || []).some((p) => p === idB || dependeDe(p, idB, vistos));
     }
 
-    // Ids das tarefas que dependem de `id` e ainda estão sem início planejado
     function sucessorasSemInicio(id) {
         return estado.tasks
             .filter((s) => s.pred?.includes(id) && !s.planned?.[0])
             .map((s) => s.id);
     }
 
-    // Ajusta o início planejado para o dia seguinte ao fim da predecessora mais tardia.
-    //  - Tarefas em `ids` (forçadas): o início SEMPRE vira esse dia, esteja vazio,
-    //    antes ou depois. Usado ao escolher a predecessora.
-    //  - Demais tarefas: só são empurradas para frente se começarem antes disso.
-    //    Nunca puxa para trás e nunca preenche início vazio.
-    // Mantém a duração quando início e fim existem. Retorna true se algo mudou.
+    // Retorna a data final efetiva/projetada da tarefa predecessora
+    function obterFimEfetivo(tarefa) {
+        if (!tarefa) return "";
 
+        const [iniPlan, fimPlan] = tarefa.planned || [];
+        const [iniReal, fimReal] = tarefa.real || [];
+
+        // 1. Se possui término real informado, essa é a data de conclusão efetiva
+        if (fimReal) return fimReal;
+
+        // 2. Se iniciou no real, projeta o término mantendo a duração planejada original
+        if (iniReal && iniPlan && fimPlan) {
+            const duracao = diferencaDias(analisarData(iniPlan), analisarData(fimPlan));
+            const fimProjetado = paraISO(adicionarDias(analisarData(iniReal), duracao));
+            if (fimProjetado > fimPlan) return fimProjetado;
+        }
+
+        // 3. Se a data planejada já venceu e a tarefa não foi concluída, projeta o término a partir de HOJE
+        const hoje = paraISO(new Date());
+        if (fimPlan && hoje > fimPlan && (tarefa.progress ?? 0) < 100) {
+            return hoje;
+        }
+
+        // 4. Caso padrão: data final planejada
+        return fimPlan || "";
+    }
+
+    // Reagendamento automático considerando atrasos reais e mantendo duração prevista
     function reagendar(ids = []) {
         const forcar = new Set(ids);
         let moveu = false;
         estado.tasks.forEach((t) => (t.reagendada = false));
 
-        // Sem ciclos, a cadeia converge em no máximo N passadas
         for (let passo = 0; passo < estado.tasks.length; passo++) {
             let mudou = false;
 
             estado.tasks.forEach((t) => {
                 if (t.group || !t.pred?.length) return;
 
+                // Obtém a data de término efetiva (maior entre planejada e real/projetada) das predecessoras
                 const fimPredecessora = t.pred
-                    .map((id) => buscarTarefa(id)?.planned?.[1])
+                    .map((id) => obterFimEfetivo(buscarTarefa(id)))
                     .filter(Boolean)
                     .sort()
                     .pop();
@@ -395,10 +401,11 @@ $(function () {
 
                 const [ini, fim] = t.planned || [];
                 const novoInicio = paraISO(adicionarDias(analisarData(fimPredecessora), 1));
-                const deveMover = forcar.has(t.id) ? ini !== novoInicio : ini && ini < novoInicio;
+                const deveMover = forcar.has(t.id) || !ini || ini < novoInicio;
                 if (!deveMover) return;
 
-                let novoFim = "";
+                // Mantém a duração original prevista da atividade
+                let novoFim = novoInicio;
                 if (ini && fim) {
                     const duracao = Math.max(0, diferencaDias(analisarData(ini), analisarData(fim)));
                     novoFim = paraISO(adicionarDias(analisarData(novoInicio), duracao));
@@ -409,7 +416,8 @@ $(function () {
                 t.planned = [novoInicio, novoFim];
                 t.reagendada = mudou = moveu = true;
 
-                // Quem depende desta tarefa e está sem início passa a receber a data
+                // Dispara em cadeia para quem depende desta tarefa
+                forcar.add(t.id);
                 sucessorasSemInicio(t.id).forEach((id) => forcar.add(id));
             });
 
@@ -437,7 +445,6 @@ $(function () {
         } else if (field === "progress") {
             task.progress = Number(val);
         } else if (field === "pred") {
-            // Descarta vínculos que criariam dependência circular
             task.pred = (val || []).map(Number).filter((pid) => pid !== task.id && !dependeDe(pid, task.id));
         } else {
             task[field] = val;
@@ -451,7 +458,6 @@ $(function () {
     // ---------------------------------------------------------------
 
     function intervaloParaEscala() {
-        // Intervalo inicial: 6 meses antes e 6 meses depois de hoje
         const hoje = new Date();
         let dataMin = new Date(hoje.getFullYear(), hoje.getMonth() - 6, 1);
         let dataMax = new Date(hoje.getFullYear(), hoje.getMonth() + 7, 0);
@@ -531,7 +537,6 @@ $(function () {
         return { arr: listaPeriodos, min: dataMin, max: dataMax, cfg: configuracao };
     }
 
-    // Cache zerado a cada renderizar(): o cálculo roda uma vez por renderização
     function periodos() {
         return periodosCache || (periodosCache = calcularPeriodos());
     }
@@ -567,14 +572,12 @@ $(function () {
         return html;
     }
 
-    // Guarda ids (não o número "1.2"). Não lista a própria tarefa nem quem
-    // já depende dela, para impedir dependência circular.
     function opcoesPredecessora(tarefaAtual) {
         const selecionadas = [].concat(tarefaAtual.pred || []);
 
         return estado.tasks
             .filter((t) => !t.group && t.id !== tarefaAtual.id && !dependeDe(t.id, tarefaAtual.id))
-            .map((t) => `<option value="${t.id}"${selecionadas.includes(t.id) ? " selected" : ""}>${escaparHtml(`${t.no} — ${t.name}`)}</option>`)
+            .map((t) => `<option value="${t.id}"${selecionadas.includes(t.id) ? " selected" : ""}>${escaparHtml(`${t.no} —${t.name}`)}</option>`)
             .join("");
     }
 
@@ -612,8 +615,6 @@ $(function () {
 
     function acoesHtml(t) {
         const proxima = estado.tasks[estado.tasks.indexOf(t) + 1];
-
-        // "+" só onde uma nova linha vai entrar: atividade sem tarefas ou última tarefa do grupo
         const mostrarAdd = t.group ? !filhasDoGrupo(t).length : !proxima || proxima.group;
 
         const botao = (acao, icone, cor, titulo) => `
@@ -657,7 +658,7 @@ $(function () {
     }
 
     function renderizarEsquerda() {
-        const $body = $("#leftBody").empty();
+        const $body =$("#leftBody").empty();
 
         estado.tasks.forEach((tarefa) => {
             const isGroup = tarefa.group;
@@ -706,7 +707,6 @@ $(function () {
         atualizarVisibilidadeColunas();
     }
 
-    // Setas de dependência término → início, por cima das barras
     function desenharSetas($body, totalWidth, linhas) {
         const cor = "#6c757d";
         const caminhos = [];
@@ -726,7 +726,6 @@ $(function () {
                 const x2 = posicaoParaData(iniT);
                 const y2 = rowT.offsetTop + rowT.offsetHeight / 2;
 
-                // Folga suficiente: desce direto. Sem folga (caso comum, +1 dia): contorna pela borda da linha
                 const yBorda = y2 > y1 ? rowT.offsetTop : rowT.offsetTop + rowT.offsetHeight;
                 const d = x2 >= x1 + 12
                     ? `M${x1},${y1} H${x1 + 6} V${y2} H${x2}`
@@ -762,19 +761,17 @@ $(function () {
         headerHtml += `</div>`;
         $("#timelineHeader").html(headerHtml);
 
-        // position: relative é o que permite posicionar o SVG das setas sobre as linhas
-        const $body = $("#timelineBody").empty().css({ width: `${totalWidth}px`, position: "relative" });
+        const $body =$("#timelineBody").empty().css({ width: `${totalWidth}px`, position: "relative" });
         const posHoje = posicaoParaData(paraISO(new Date()));
 
         estado.tasks.forEach((tarefa) => {
-            const $row = $(`<div class="timeline-row ${tarefa.group ? "group" : ""}" style="width:${totalWidth}px;"></div>`);
+            const $row =$(`<div class="timeline-row ${tarefa.group ? "group" : ""}" style="width:${totalWidth}px;"></div>`);
             const resumo = tarefa.group ? resumoGrupo(tarefa) : null;
 
             if (posHoje > 0 && posHoje < totalWidth) {
                 $row.append(`<div class="today-line" style="left:${posHoje}px;"></div>`);
             }
 
-            // Barra de referência (planejado ou linha de base). No grupo, vem do resumo das filhas
             const baselineDates = resumo
                 ? (compararLinhaBase ? resumo.baseline : resumo.planned)
                 : (compararLinhaBase ? (tarefa.baseline || tarefa.planned) : tarefa.planned);
@@ -790,7 +787,6 @@ $(function () {
                 `);
             }
 
-            // Barra real: só existe quando há data de início real (no grupo, quando alguma filha começou)
             const datasReal = resumo ? resumo.real : (tarefa.real || []);
             const dataInicioBarra = datasReal[0];
 
@@ -829,9 +825,6 @@ $(function () {
         desenharSetas($body, totalWidth, linhas);
     }
 
-    // Aplica o multipleSelect nas predecessoras. Ao FECHAR o dropdown grava as
-    // escolhas, acerta a data de início da tarefa e redesenha
-    // (redesenhar com o dropdown aberto o destruiria).
     function iniciarPredecessoras() {
         $(".pred-select").each(function () {
             const el = this;
@@ -859,34 +852,26 @@ $(function () {
     }
 
     function renderizar() {
-        // 0. Zera cache e dropdown aberto: tarefas ou escala podem ter mudado
         periodosCache = null;
         predAberto = null;
 
-        // 1. Destrói tooltips e multipleSelect ANTES de apagar o DOM
-        //    (com container: 'body' o dropdown fica solto no body e ficaria órfão)
         $('[data-bs-toggle="tooltip"]').tooltip("dispose");
-        $('.tooltip').remove(); // opcional
-        $(".pred-select").multipleSelect("destroy");
+        $('.tooltip').remove();$(".pred-select").multipleSelect("destroy");
 
-        // 2. Limpa os containers
         $("#leftBody").empty();
         $("#rightBody").empty();
 
-        // 3. Processa regras e renderiza o HTML
         recalcularNumeracao();
         calcularCaminhoCritico();
         renderizarEsquerda();
         renderizarDireita();
 
-        // 4. Inicializa tooltips e multipleSelect das predecessoras
         if (typeof tooltipsBootstrap === "function") {
             tooltipsBootstrap();
         } else {
             $('[data-bs-toggle="tooltip"]').tooltip();
         }
 
-        // Re-inicializa todos os tooltips dos novos elementos gerados
         const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
         [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
 
@@ -897,21 +882,16 @@ $(function () {
     // EVENTOS
     // ---------------------------------------------------------------
 
-    // --- Edição dos campos da tarefa ---
-
-    // 1. Atualização em tempo real do texto da atividade, progresso e datas
     $(document).on("input", ".activity-input, .progress-input, .date-input", function () {
         salvarValorNoEstado(this);
     });
 
-    // 2. Responsável (re-renderiza ao alterar)
     $(document).on("change", ".owner-select", function () {
         salvarValorNoEstado(this);
         renderizar();
     });
 
-    // 3. Datas: re-renderiza ao limpar ou ao selecionar data com ano completo (4 dígitos).
-    //    Se mudou o planejado, empurra as sucessoras e preenche as que estão sem início.
+    // Atualização de datas: re-renderiza e dispara o reagendamento em cadeia (tanto para planned quanto para real)
     $(document).on("change", ".date-input", function () {
         const res = salvarValorNoEstado(this);
         if (!res) return;
@@ -919,17 +899,15 @@ $(function () {
         const partes = res.val.split("-");
         if (res.val && !(partes.length === 3 && partes[0].length === 4)) return;
 
-        if ($(this).data("field") === "planned") reagendar(sucessorasSemInicio(res.task.id));
+        reagendar([res.task.id]);
         renderizar();
     });
 
-    // Progresso: re-renderiza para atualizar o resumo do grupo (% e barra)
     $(document).on("change", ".progress-input", function () {
         salvarValorNoEstado(this);
         renderizar();
     });
 
-    // Nome: atualiza o tooltip da barra em tempo real, sem redesenhar (não tira o foco do campo)
     $(document).on("input", ".activity-input", function () {
         const id = Number($(this).closest("tr").data("id"));
         const nome = $(this).val();
@@ -941,7 +919,6 @@ $(function () {
         });
     });
 
-    // Nome confirmado: atualiza o rótulo nas opções das predecessoras
     $(document).on("change", ".activity-input", function () {
         const id = Number($(this).closest("tr").data("id"));
         const tarefa = buscarTarefa(id);
@@ -971,17 +948,13 @@ $(function () {
         reordenarNumeracao();
         renderizar();
 
-        const $novoInput = $(`input[data-id="${proximoId}"][data-field="name"]`);
+        const $novoInput =$(`input[data-id="${proximoId}"][data-field="name"]`);
 
-        if ($novoInput.length) {
-            // Rola até o novo input e seleciona o texto para edição rápida
-            $novoInput[0].scrollIntoView({ behavior: "smooth", block: "center" });
+        if ($novoInput.length) {$novoInput[0].scrollIntoView({ behavior: "smooth", block: "center" });
             setTimeout(() => $novoInput.trigger("focus").select(), 150);
         }
     });
 
-    // ADICIONAR TAREFA: "+" da atividade sem tarefas ou da última tarefa do grupo.
-    // Nos dois casos a nova linha entra no fim do grupo.
     $(document).on("click", '[data-btn="addSubTarefa"]', function () {
         const indexOrigem = estado.tasks.findIndex((t) => t.id === Number($(this).data("id")));
         if (indexOrigem === -1) return;
@@ -1007,16 +980,13 @@ $(function () {
 
         renderizar();
 
-        // Rola até a nova linha e seleciona o nome para edição rápida
-        const $novoInput = $(`input[data-id="${proximoId}"][data-field="name"]`);
+        const $novoInput =$(`input[data-id="${proximoId}"][data-field="name"]`);
 
-        if ($novoInput.length) {
-            $novoInput[0].scrollIntoView({ behavior: "smooth", block: "center" });
+        if ($novoInput.length) {$novoInput[0].scrollIntoView({ behavior: "smooth", block: "center" });
             setTimeout(() => $novoInput.trigger("focus").select(), 150);
         }
     });
 
-    // REQUISIÇÃO DE EXCLUSÃO (abre o modal)
     $(document).on("click", '[data-btn="delSubTarefa"]', function () {
         const id = Number($(this).data("id"));
         const task = buscarTarefa(id);
@@ -1024,9 +994,9 @@ $(function () {
 
         idParaExcluir = id;
 
-        const $modalTitle = $("#deleteActivityModalLabel");
-        const $iconContainer = $("#deleteActivityModal .delete-modal-icon");
-        const $msgText = $("#deleteActivityModal .modal-body p:last");
+        const $modalTitle =$("#deleteActivityModalLabel");
+        const $iconContainer =$("#deleteActivityModal .delete-modal-icon");
+        const $msgText =$("#deleteActivityModal .modal-body p:last");
 
         $("#deleteActivityName").text(task.name);
 
@@ -1057,7 +1027,6 @@ $(function () {
 
         let qtdParaRemover = 1;
 
-        // Grupo: remove também as subtarefas filhas sequenciais
         if (estado.tasks[index].group) {
             while (
                 index + qtdParaRemover < estado.tasks.length &&
@@ -1069,7 +1038,6 @@ $(function () {
 
         const idsRemovidos = estado.tasks.splice(index, qtdParaRemover).map((t) => t.id);
 
-        // Remove das predecessoras das demais tarefas os ids que foram excluídos
         estado.tasks.forEach((t) => {
             t.pred = (t.pred || []).filter((pid) => !idsRemovidos.includes(pid));
         });
@@ -1094,24 +1062,21 @@ $(function () {
 
     $(".column-toggle").on("change", atualizarVisibilidadeColunas);
 
-    // Rola 300px para a esquerda
     $('[data-gantt-btn="prev"]').on("click", function () {
-        const $container = $("#rightScroll");
-        $container.animate({ scrollLeft: $container.scrollLeft() - 300 }, 200);
+        const $container =$("#rightScroll");
+        $container.animate({ scrollLeft:$container.scrollLeft() - 300 }, 200);
     });
 
-    // Rola 300px para a direita
     $('[data-gantt-btn="next"]').on("click", function () {
-        const $container = $("#rightScroll");
-        $container.animate({ scrollLeft: $container.scrollLeft() + 300 }, 200);
+        const $container =$("#rightScroll");
+        $container.animate({ scrollLeft:$container.scrollLeft() + 300 }, 200);
     });
 
     $("#rightScroll").on("scroll", function () {
-        const $container = $(this);
+        const $container =$(this);
         const scrollLeft = $container.scrollLeft();
-        const maxScroll = $container[0].scrollWidth - $container.outerWidth();
+        const maxScroll = $container[0].scrollWidth -$container.outerWidth();
 
-        // Desativa 'prev' no início e 'next' no fim
         $('[data-gantt-btn="prev"]').prop("disabled", scrollLeft <= 0);
         $('[data-gantt-btn="next"]').prop("disabled", scrollLeft >= maxScroll - 1);
     });
@@ -1137,7 +1102,7 @@ $(function () {
             tasks: JSON.parse(JSON.stringify(estado.tasks))
         });
 
-        const $lista = $("#listaBaselines").empty();
+        const $lista =$("#listaBaselines").empty();
         estado.baselines.forEach((b) => {
             $lista.append(`
                 <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -1179,11 +1144,9 @@ $(function () {
         }
     });
 
-    // --- Sincronização de rolagem entre as duas tabelas ---
+    // --- Sincronização de rolagem ---
     $("#leftScroll").on("scroll", function () {
         $("#rightScroll").scrollTop($(this).scrollTop());
-
-        // O dropdown fica flutuando no body (container: 'body'), então fecha ao rolar
         if (predAberto) $(predAberto).multipleSelect("close");
     });
 
