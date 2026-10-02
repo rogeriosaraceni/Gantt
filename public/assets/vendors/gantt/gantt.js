@@ -1151,18 +1151,20 @@ $(function () {
             tasksAtuais: JSON.parse(JSON.stringify(estado.tasks))
         };
 
-        $.magnificPopup.open({
-            items: {
-                src: "/popups/compara-linha-base"
-            },
-            type: "iframe",
-            iframe: {
-                markup: '<div class="mfp-iframe-scaler" style="padding-top: 80vh;">' +
-                        '<div class="mfp-close"></div>' +
-                        '<iframe class="mfp-iframe" frameborder="0" allowfullscreen></iframe>' +
-                        '</div>'
-            }
-        });
+        if ($.magnificPopup) {
+            $.magnificPopup.open({
+                items: { src: "/popups/compara-linha-base" },
+                type: "iframe",
+                iframe: {
+                    markup: '<div class="mfp-iframe-scaler" style="padding-top: 80vh;">' +
+                            '<div class="mfp-close"></div>' +
+                            '<iframe class="mfp-iframe" frameborder="0" allowfullscreen></iframe>' +
+                            '</div>'
+                }
+            });
+        } else {
+            console.warn("Plugin Magnific Popup não está carregado.");
+        }
     });
 
     // --- Sincronização de rolagem entre as duas tabelas ---
