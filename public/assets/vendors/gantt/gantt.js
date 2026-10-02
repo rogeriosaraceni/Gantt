@@ -32,6 +32,7 @@ $(function () {
     let predAberto = null;
     let acaoPendenteAjuste = null;
     let valorAnteriorInput = "";
+    let focoGrupoId = null;
 
     // ---------------------------------------------------------------
     // UTILITÁRIOS GERAIS
@@ -127,7 +128,6 @@ $(function () {
         const grupos = [];
         let grupoAtual = null;
 
-        // Agrupa tarefas mantendo a associação com seus respectivos grupos
         estado.tasks.forEach((t) => {
             if (t.group) {
                 grupoAtual = { grupo: t, filhas: [] };
@@ -140,7 +140,6 @@ $(function () {
             }
         });
 
-        // Comparador de datas ISO (mais recente primeiro; sem data no final)
         const compararDatasDesc = (dataA, dataB) => {
             if (!dataA && !dataB) return 0;
             if (!dataA) return 1;
@@ -154,19 +153,16 @@ $(function () {
             return datas[0] || "";
         };
 
-        // 1. Ordena as filhas dentro de cada grupo (mais recente primeiro)
         grupos.forEach((g) => {
             g.filhas.sort((a, b) => compararDatasDesc(a.planned?.[0], b.planned?.[0]));
         });
 
-        // 2. Ordena os grupos pela data de início (mais recente primeiro)
         grupos.sort((a, b) => {
             const dtA = obterInicioGrupo(a);
             const dtB = obterInicioGrupo(b);
             return compararDatasDesc(dtA, dtB);
         });
 
-        // 3. Reconstrói o array plano de tarefas
         const novasTasks = [];
         grupos.forEach((g) => {
             if (g.grupo) novasTasks.push(g.grupo);
@@ -263,6 +259,7 @@ $(function () {
     // ---------------------------------------------------------------
     // CÁLCULO DO CAMINHO CRÍTICO (CPM)
     // ---------------------------------------------------------------
+
     function calcularCaminhoCritico() {
         estado.tasks.forEach((t) => (t.critical = false));
 
@@ -469,7 +466,6 @@ $(function () {
         return moveu;
     }
 
-    // SIMULAÇÃO DE REAGENDAMENTO (USADO PELO MODAL)
     function reagendarSimulacao(listaTarefas, ids = []) {
         const forcar = new Set(ids);
         const alteradas = new Set(ids);
@@ -708,35 +704,54 @@ $(function () {
     }
 
     function acoesHtml(t) {
-        const proxima = estado.tasks[estado.tasks.indexOf(t) + 1];
-        const mostrarAdd = t.group ? !filhasDoGrupo(t).length : !proxima || proxima.group;
-
-        const botao = (acao, icone, cor, titulo) => `
-            <button
-                type="button"
-                class="btn btn-link ${cor} p-0 border-0"
-                data-btn="${acao}"
-                data-id="${t.id}"
-                data-bs-toggle="tooltip"
-                data-bs-container="body"
-                data-bs-title="${titulo}"
-                aria-label="${titulo}"
-            >
-                <i class="bi ${icone} fs-6"></i>
-            </button>
-        `;
-
         return `
-            <div class="d-flex justify-content-center align-items-center gap-2">
-                <div class="actions-icons">
-                    ${botao("delSubTarefa", "bi-trash", "text-danger", t.group ? "Excluir atividade" : "Excluir tarefa")}
-                </div>
-
-                <div class="actions-icons">
-                    ${mostrarAdd ? botao("addSubTarefa", "bi-plus-lg", "text-primary", "Adicionar tarefa") : ""}
-                </div>
+            <div class="d-flex justify-content-center align-items-center">
+                <button
+                    type="button"
+                    class="btn btn-link text-danger p-0 border-0"
+                    data-btn="delSubTarefa"
+                    data-id="${t.id}"
+                    data-bs-toggle="tooltip"
+                    data-bs-container="body"
+                    data-bs-title="${t.group ? "Excluir atividade" : "Excluir tarefa"}"
+                    aria-label="${t.group ? "Excluir atividade" : "Excluir tarefa"}"
+                >
+                    <i class="bi bi-trash fs-6"></i>
+                </button>
             </div>
         `;
+    }
+
+    function renderLinhaQuickAdd(grupoId) {
+        return `
+            <tr class="quick-add-row" data-group-id="${grupoId}">
+                <td class="text-center" style="width: 80px;"></td>
+                <td class="text-center text-secondary"></td>
+                <td class="activity-cell">
+                    <input
+                        type="text"
+                        class="quick-add-input"
+                        data-group-id="${grupoId}"
+                        placeholder="Incluir nova tarefa"
+                        style="width: 100%; border: none; border-bottom: 1px solid #ced4da; outline: none; background: transparent; padding: 2px 4px; font-size: 0.875rem;"
+                    >
+                </td>
+                <td class="col-owner"></td>
+                <td class="col-planned"></td>
+                <td class="col-real"></td>
+                <td class="col-predecessors"></td>
+                <td class="col-progress"></td>
+            </tr>
+        `;
+    }
+
+    function renderLinhaQuickAddDireita(totalWidth, posHoje) {
+        let html = `<div class="timeline-row quick-add-row" style="width:${totalWidth}px;">`;
+        if (posHoje > 0 && posHoje < totalWidth) {
+            html += `<div class="today-line" style="left:${posHoje}px;"></div>`;
+        }
+        html += `</div>`;
+        return html;
     }
 
     function ehMarco(tarefa, inicio, fim) {
@@ -803,8 +818,16 @@ $(function () {
 
     function renderizarEsquerda() {
         const $body = $("#leftBody").empty();
+        let grupoAtualId = null;
 
-        estado.tasks.forEach((tarefa) => {
+        estado.tasks.forEach((tarefa, index) => {
+            if (tarefa.group) {
+                if (grupoAtualId !== null) {
+                    $body.append(renderLinhaQuickAdd(grupoAtualId));
+                }
+                grupoAtualId = tarefa.id;
+            }
+
             const isGroup = tarefa.group;
             const classeLinha = isGroup ? "group-row" : "child";
             const emAtraso = verificarAtraso(tarefa);
@@ -846,6 +869,10 @@ $(function () {
                     </td>
                 </tr>
             `);
+
+            if (index === estado.tasks.length - 1 && grupoAtualId !== null) {
+                $body.append(renderLinhaQuickAdd(grupoAtualId));
+            }
         });
 
         atualizarVisibilidadeColunas();
@@ -907,9 +934,17 @@ $(function () {
 
         const $body = $("#timelineBody").empty().css({ width: `${totalWidth}px`, position: "relative" });
         const posHoje = posicaoParaData(paraISO(new Date()));
+        let grupoAtualId = null;
 
-        estado.tasks.forEach((tarefa) => {
-            const $row =$(`<div class="timeline-row ${tarefa.group ? "group" : ""}" style="width:${totalWidth}px;"></div>`);
+        estado.tasks.forEach((tarefa, index) => {
+            if (tarefa.group) {
+                if (grupoAtualId !== null) {
+                    $body.append(renderLinhaQuickAddDireita(totalWidth, posHoje));
+                }
+                grupoAtualId = tarefa.id;
+            }
+
+            const $row = $(`<div class="timeline-row ${tarefa.group ? "group" : ""}" style="width:${totalWidth}px;"></div>`);
             const resumo = tarefa.group ? resumoGrupo(tarefa) : null;
 
             if (posHoje > 0 && posHoje < totalWidth) {
@@ -1000,6 +1035,10 @@ $(function () {
 
             $body.append($row);
             linhas.set(tarefa.id, $row[0]);
+
+            if (index === estado.tasks.length - 1 && grupoAtualId !== null) {
+                $body.append(renderLinhaQuickAddDireita(totalWidth, posHoje));
+            }
         });
 
         desenharSetas($body, totalWidth, linhas);
@@ -1057,11 +1096,53 @@ $(function () {
         [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
 
         iniciarPredecessoras();
+
+        if (focoGrupoId) {
+            const $input =$(`.quick-add-input[data-group-id="${focoGrupoId}"]`);
+            if ($input.length) {
+                setTimeout(() => $input.trigger("focus"), 50);
+            }
+            focoGrupoId = null;
+        }
     }
 
     // ---------------------------------------------------------------
     // EVENTOS
     // ---------------------------------------------------------------
+
+    $(document).on("keydown", ".quick-add-input", function (e) {
+        if (e.key === "Enter" || e.keyCode === 13) {
+            e.preventDefault();
+            const nome = $(this).val().trim();
+            if (!nome) return;
+
+            const grupoId = Number($(this).data("group-id"));
+            const indexGrupo = estado.tasks.findIndex((t) => t.id === grupoId);
+            if (indexGrupo === -1) return;
+
+            let indexInsercao = indexGrupo + 1;
+            while (indexInsercao < estado.tasks.length && !estado.tasks[indexInsercao].group) {
+                indexInsercao++;
+            }
+
+            proximoId++;
+            estado.tasks.splice(indexInsercao, 0, {
+                id: proximoId,
+                no: "",
+                name: nome,
+                owner: "",
+                planned: ["", ""],
+                baseline: ["", ""],
+                real: ["", ""],
+                pred: [],
+                progress: 0,
+                group: false
+            });
+
+            focoGrupoId = grupoId;
+            renderizar();
+        }
+    });
 
     $(document).on("input", ".activity-input, .progress-input", function () {
         salvarValorNoEstado(this);
@@ -1081,7 +1162,7 @@ $(function () {
         valorAnteriorInput = $(this).val();
     });
 
-    // Intercepta a alteração na data e avalia o impacto no cronograma
+    // Evento de alteração de data refatorado para evitar falsos positivos de atraso
     $(document).on("change", ".date-input", function () {
         const inputEl = this;
         const $input =$(inputEl);
@@ -1093,21 +1174,26 @@ $(function () {
         const val = $input.val().trim();
         if (val !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(val)) return;
 
+        // Se o valor não foi alterado em relação ao que já estava antes do foco, encerra
+        if (val === valorAnteriorInput) return;
+
         const field = $input.data("field");
         const index = Number($input.data("index"));
 
-        // SIMULAÇÃO: Clona as tarefas para prever o reagendamento em cadeia
         const cloneTasks = JSON.parse(JSON.stringify(estado.tasks));
         const draftTask = cloneTasks.find((t) => t.id === id);
 
         if (draftTask) {
             if (!draftTask[field]) draftTask[field] = ["", ""];
             draftTask[field][index] = val;
+
+            if (field === "real" && index === 1 && val !== "") {
+                draftTask.progress = 100;
+            }
         }
 
         const maxDataAntes = obterFimMaximoProjeto(estado.tasks);
 
-        // Executa simulação de reagendamento no clone
         const afetadas = reagendarSimulacao(cloneTasks, [id]);
         const maxDataDepois = obterFimMaximoProjeto(cloneTasks);
 
@@ -1116,7 +1202,16 @@ $(function () {
             diferencaDiasProjeto = diferencaDias(maxDataAntes, maxDataDepois);
         }
 
-        const qtdDependentesAfetadas = Math.max(0, afetadas.length - 1);
+        // Filtra apenas tarefas dependentes que REALMENTE sofreram alteração nas datas planejadas
+        const dependentesRealmenteAfetadas = afetadas.filter((afetId) => {
+            if (afetId === id) return false;
+            const tOrig = estado.tasks.find((t) => t.id === afetId);
+            const tSim = cloneTasks.find((t) => t.id === afetId);
+            if (!tOrig || !tSim) return false;
+            return JSON.stringify(tOrig.planned) !== JSON.stringify(tSim.planned);
+        });
+
+        const qtdDependentesAfetadas = dependentesRealmenteAfetadas.length;
 
         if (diferencaDiasProjeto !== 0 || qtdDependentesAfetadas > 0) {
             acaoPendenteAjuste = {
@@ -1192,38 +1287,6 @@ $(function () {
         });
 
         reordenarNumeracao();
-        renderizar();
-
-        const $novoInput =$(`input[data-id="${proximoId}"][data-field="name"]`);
-
-        if ($novoInput.length) {$novoInput[0].scrollIntoView({ behavior: "smooth", block: "center" });
-            setTimeout(() => $novoInput.trigger("focus").select(), 150);
-        }
-    });
-
-    $(document).on("click", '[data-btn="addSubTarefa"]', function () {
-        const indexOrigem = estado.tasks.findIndex((t) => t.id === Number($(this).data("id")));
-        if (indexOrigem === -1) return;
-
-        let indexInsercao = indexOrigem + 1;
-        while (indexInsercao < estado.tasks.length && !estado.tasks[indexInsercao].group) {
-            indexInsercao++;
-        }
-
-        proximoId++;
-        estado.tasks.splice(indexInsercao, 0, {
-            id: proximoId,
-            no: "",
-            name: "Nova tarefa",
-            owner: "",
-            planned: ["", ""],
-            baseline: ["", ""],
-            real: ["", ""],
-            pred: [],
-            progress: 0,
-            group: false
-        });
-
         renderizar();
 
         const $novoInput =$(`input[data-id="${proximoId}"][data-field="name"]`);
