@@ -494,6 +494,47 @@ modal
     color: var(--g-atrasado);
 }
 
+/* Estilo Base do Marco (Losango) */
+.milestone-diamond {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background-color: #0d6efd; /* Azul padrão */
+    transform: translateY(-50%) rotate(45deg);
+    top: 50%;
+    margin-left: -7px; /* Centraliza sobre o ponto exato da data */
+    z-index: 4;
+    cursor: pointer;
+    transition: transform 0.2s, background-color 0.2s;
+}
+
+.milestone-diamond:hover {
+    transform: translateY(-50%) rotate(45deg) scale(1.3);
+}
+
+/* Status do Marco */
+.milestone-diamond.completed {
+    background-color: #198754; /* Verde quando concluído (100%) */
+}
+
+.milestone-diamond.overdue {
+    background-color: #dc3545; /* Vermelho quando atrasado */
+}
+
+.milestone-diamond.critical {
+    box-shadow: 0 0 0 2px #dc3545; /* Destaque de Caminho Crítico */
+}
+
+/* Marco na Linha de Base (Baseline) */
+.milestone-diamond.baseline {
+    background-color: #6c757d;
+    width: 12px;
+    height: 12px;
+    margin-left: -6px;
+    opacity: 0.65;
+    z-index: 3;
+}
+
 /*-----------------------------------------------------
 @media
 ------------------------------------------------------*/

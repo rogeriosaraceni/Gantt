@@ -651,6 +651,22 @@ $(function () {
     }
 
     // ---------------------------------------------------------------
+    // FUNÇÃO AUXILIAR: IDENTIFICAÇÃO DE MARCOS (0 DIAS DE DURAÇÃO)
+    // ---------------------------------------------------------------
+    function ehMarco(tarefa, inicio, fim) {
+        if (tarefa.group) return false;
+        if (tarefa.isMilestone) return true;
+        if (!inicio) return false;
+
+        const dataFim = fim || inicio;
+        if (inicio === dataFim) return true;
+
+        const dIni = analisarData(inicio);
+        const dFim = analisarData(dataFim);
+        return dIni && dFim && diferencaDias(dIni, dFim) === 0;
+    }
+
+    // ---------------------------------------------------------------
     // RENDERIZAÇÃO
     // ---------------------------------------------------------------
 
@@ -754,6 +770,9 @@ $(function () {
         `);
     }
 
+    // ---------------------------------------------------------------
+    // RENDERIZAÇÃO DA TIMELINE E GRÁFICO (COM SUPORTE A MARCOS)
+    // ---------------------------------------------------------------
     function renderizarDireita() {
         const p = periodos();
         const totalWidth = p.arr.length * p.cfg.width;
@@ -777,50 +796,88 @@ $(function () {
                 $row.append(`<div class="today-line" style="left:${posHoje}px;"></div>`);
             }
 
+            // 1. DESENHO DA LINHA DE BASE (BASELINE)
             const baselineDates = resumo
                 ? (compararLinhaBase ? resumo.baseline : resumo.planned)
                 : (compararLinhaBase ? (tarefa.baseline || tarefa.planned) : tarefa.planned);
 
-            if (baselineDates?.[0] && baselineDates?.[1]) {
-                $row.append(`
-                    <div
-                        class="bar baseline-bar"
-                        style="left:${posicaoParaData(baselineDates[0])}px; width:${larguraParaIntervalo(baselineDates[0], baselineDates[1])}px;"
-                        data-bs-toggle="tooltip"
-                        data-bs-title="Linha de Base${tarefa.group ? " (consolidado)" : ""}: ${formatarDataBR(baselineDates[0])} a ${formatarDataBR(baselineDates[1])}"
-                    ></div>
-                `);
+            if (baselineDates?.[0]) {
+                const fimBase = baselineDates[1] || baselineDates[0];
+                const marcoBase = ehMarco(tarefa, baselineDates[0], fimBase);
+
+                if (marcoBase) {
+                    $row.append(`
+                        <div
+                            class="milestone-diamond baseline"
+                            style="left:${posicaoParaData(baselineDates[0])}px;"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="Marco Baseline: ${formatarDataBR(baselineDates[0])}"
+                        ></div>
+                    `);
+                } else if (baselineDates[1]) {
+                    $row.append(`
+                        <div
+                            class="bar baseline-bar"
+                            style="left:${posicaoParaData(baselineDates[0])}px; width:${larguraParaIntervalo(baselineDates[0], baselineDates[1])}px;"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="Linha de Base${tarefa.group ? " (consolidado)" : ""}: ${formatarDataBR(baselineDates[0])} a ${formatarDataBR(baselineDates[1])}"
+                        ></div>
+                    `);
+                }
             }
 
+            // 2. DESENHO DA EXECUÇÃO / PLANEJADO (BARRA OU LOSANGO)
             const datasReal = resumo ? resumo.real : (tarefa.real || []);
-            const dataInicioBarra = datasReal[0];
+            const dataInicioBarra = datasReal[0] || (!tarefa.group ? tarefa.planned?.[0] : "");
 
             if (dataInicioBarra) {
-                const dataFimBarra = datasReal[1] || paraISO(new Date());
+                const dataFimBarra = datasReal[1] || (tarefa.planned?.[1] ? tarefa.planned[1] : dataInicioBarra);
+                const marco = ehMarco(tarefa, dataInicioBarra, dataFimBarra);
                 const emAtraso = verificarAtraso(tarefa);
                 const criticoAtrasado = tarefa.group
                     ? filhasDoGrupo(tarefa).some((f) => verificarAtraso(f) && f.critical)
                     : emAtraso && tarefa.critical;
 
-                let barClass = tarefa.group ? "bar group-bar" : "bar task-bar";
-                if (criticoAtrasado) barClass += " critical";
-                else if (emAtraso) barClass += " overdue";
-
                 const pct = Math.min(100, Math.max(0, resumo ? resumo.progress : (tarefa.progress ?? 0)));
-                const sufixo = `${tarefa.group ? " (consolidado)" : ""} (${pct}%) - ${formatarDataBR(dataInicioBarra)} a ${formatarDataBR(dataFimBarra)}`;
 
-                $row.append(`
-                    <div
-                        class="${barClass}"
-                        style="left:${posicaoParaData(dataInicioBarra)}px; width:${larguraParaIntervalo(dataInicioBarra, dataFimBarra)}px;"
-                        data-task-id="${tarefa.id}"
-                        data-suffix="${escaparHtml(sufixo)}"
-                        data-bs-toggle="tooltip"
-                        data-bs-title="${escaparHtml(tarefa.name + sufixo)}"
-                    >
-                        <div class="progress-fill" style="width:${pct}%;"></div>
-                    </div>
-                `);
+                if (marco) {
+                    let marcoClass = "milestone-diamond";
+                    if (pct === 100) marcoClass += " completed";
+                    else if (criticoAtrasado || emAtraso) marcoClass += " overdue";
+                    if (tarefa.critical) marcoClass += " critical";
+
+                    const sufixo = ` (Marco) - ${formatarDataBR(dataInicioBarra)}`;
+
+                    $row.append(`
+                        <div
+                            class="${marcoClass}"
+                            style="left:${posicaoParaData(dataInicioBarra)}px;"
+                            data-task-id="${tarefa.id}"
+                            data-suffix="${escaparHtml(sufixo)}"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="${escaparHtml(tarefa.name + sufixo)}"
+                        ></div>
+                    `);
+                } else {
+                    let barClass = tarefa.group ? "bar group-bar" : "bar task-bar";
+                    if (criticoAtrasado) barClass += " critical";
+                    else if (emAtraso) barClass += " overdue";
+
+                    const sufixo = `${tarefa.group ? " (consolidado)" : ""} (${pct}%) - ${formatarDataBR(dataInicioBarra)} a ${formatarDataBR(dataFimBarra)}`;
+
+                    $row.append(`
+                        <div
+                            class="${barClass}"
+                            style="left:${posicaoParaData(dataInicioBarra)}px; width:${larguraParaIntervalo(dataInicioBarra, dataFimBarra)}px;"
+                            data-task-id="${tarefa.id}"
+                            data-suffix="${escaparHtml(sufixo)}"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="${escaparHtml(tarefa.name + sufixo)}"
+                        >
+                            <div class="progress-fill" style="width:${pct}%;"></div>
+                        </div>
+                    `);
+                }
             }
 
             $body.append($row);
