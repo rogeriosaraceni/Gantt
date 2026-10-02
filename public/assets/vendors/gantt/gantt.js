@@ -30,6 +30,8 @@ $(function () {
     let idParaExcluir = null;
     let periodosCache = null;
     let predAberto = null;
+    let acaoPendenteAjuste = null;
+    let valorAnteriorInput = "";
 
     // ---------------------------------------------------------------
     // UTILITÁRIOS GERAIS
@@ -181,7 +183,6 @@ $(function () {
         };
     }
 
-    // --- REQUISITO 2: VERIFICAÇÃO DE ATRASO CORRIGIDA ---
     function verificarAtraso(tarefa) {
         if (tarefa.group) return filhasDoGrupo(tarefa).some(verificarAtraso);
 
@@ -194,13 +195,10 @@ $(function () {
         const hoje = new Date();
         hoje.setHours(0, 0, 0, 0);
 
-        // Caso 2: Concluída com data final real posterior à planejada
         if (dataFimReal && dataFimReal > dataFimPlan) {
             return true;
         }
 
-        // Caso 1: Data final planejada já venceu e a tarefa NÃO foi concluída
-        // (Só é não concluída se NÃO tiver data real E o progresso for < 100%)
         const naoConcluida = progresso < 100 && !dataFimReal;
         if (hoje > dataFimPlan && naoConcluida) {
             return true;
@@ -210,7 +208,7 @@ $(function () {
     }
 
     // ---------------------------------------------------------------
-    // CÁLCULO DO CAMINHO CRÍTICO (CPM - Critical Path Method)
+    // CÁLCULO DO CAMINHO CRÍTICO (CPM)
     // ---------------------------------------------------------------
     function calcularCaminhoCritico() {
         estado.tasks.forEach((t) => (t.critical = false));
@@ -337,7 +335,7 @@ $(function () {
     }
 
     // ---------------------------------------------------------------
-    // DEPENDÊNCIAS E REAGENDAMENTO AUTOMÁTICO (REQUISITO 3)
+    // DEPENDÊNCIAS E REAGENDAMENTO AUTOMÁTICO
     // ---------------------------------------------------------------
 
     function dependeDe(idA, idB, vistos = new Set()) {
@@ -346,40 +344,34 @@ $(function () {
         return (buscarTarefa(idA)?.pred || []).some((p) => p === idB || dependeDe(p, idB, vistos));
     }
 
-    function sucessorasSemInicio(id) {
-        return estado.tasks
+    function sucessorasSemInicio(id, lista = estado.tasks) {
+        return lista
             .filter((s) => s.pred?.includes(id) && !s.planned?.[0])
             .map((s) => s.id);
     }
 
-    // Retorna a data final efetiva/projetada da tarefa predecessora
     function obterFimEfetivo(tarefa) {
         if (!tarefa) return "";
 
         const [iniPlan, fimPlan] = tarefa.planned || [];
         const [iniReal, fimReal] = tarefa.real || [];
 
-        // 1. Se possui término real informado, essa é a data de conclusão efetiva
         if (fimReal) return fimReal;
 
-        // 2. Se iniciou no real, projeta o término mantendo a duração planejada original
         if (iniReal && iniPlan && fimPlan) {
             const duracao = diferencaDias(analisarData(iniPlan), analisarData(fimPlan));
             const fimProjetado = paraISO(adicionarDias(analisarData(iniReal), duracao));
             if (fimProjetado > fimPlan) return fimProjetado;
         }
 
-        // 3. Se a data planejada já venceu e a tarefa não foi concluída, projeta o término a partir de HOJE
         const hoje = paraISO(new Date());
         if (fimPlan && hoje > fimPlan && (tarefa.progress ?? 0) < 100) {
             return hoje;
         }
 
-        // 4. Caso padrão: data final planejada
         return fimPlan || "";
     }
 
-    // Reagendamento automático considerando atrasos reais e mantendo duração prevista
     function reagendar(ids = []) {
         const forcar = new Set(ids);
         let moveu = false;
@@ -391,7 +383,6 @@ $(function () {
             estado.tasks.forEach((t) => {
                 if (t.group || !t.pred?.length) return;
 
-                // Obtém a data de término efetiva (maior entre planejada e real/projetada) das predecessoras
                 const fimPredecessora = t.pred
                     .map((id) => obterFimEfetivo(buscarTarefa(id)))
                     .filter(Boolean)
@@ -404,7 +395,6 @@ $(function () {
                 const deveMover = forcar.has(t.id) || !ini || ini < novoInicio;
                 if (!deveMover) return;
 
-                // Mantém a duração original prevista da atividade
                 let novoFim = novoInicio;
                 if (ini && fim) {
                     const duracao = Math.max(0, diferencaDias(analisarData(ini), analisarData(fim)));
@@ -416,7 +406,6 @@ $(function () {
                 t.planned = [novoInicio, novoFim];
                 t.reagendada = mudou = moveu = true;
 
-                // Dispara em cadeia para quem depende desta tarefa
                 forcar.add(t.id);
                 sucessorasSemInicio(t.id).forEach((id) => forcar.add(id));
             });
@@ -427,7 +416,55 @@ $(function () {
         return moveu;
     }
 
-    // Persiste o valor do input no objeto de estado
+    // SIMULAÇÃO DE REAGENDAMENTO (USADO PELO MODAL)
+    function reagendarSimulacao(listaTarefas, ids = []) {
+        const forcar = new Set(ids);
+        const alteradas = new Set(ids);
+        const buscarNaLista = (id) => listaTarefas.find((t) => t.id === id);
+
+        for (let passo = 0; passo < listaTarefas.length; passo++) {
+            let mudou = false;
+
+            listaTarefas.forEach((t) => {
+                if (t.group || !t.pred?.length) return;
+
+                const fimPredecessora = t.pred
+                    .map((pid) => obterFimEfetivo(buscarNaLista(pid)))
+                    .filter(Boolean)
+                    .sort()
+                    .pop();
+                if (!fimPredecessora) return;
+
+                const [ini, fim] = t.planned || [];
+                const novoInicio = paraISO(adicionarDias(analisarData(fimPredecessora), 1));
+                const deveMover = forcar.has(t.id) || !ini || ini < novoInicio;
+                if (!deveMover) return;
+
+                let novoFim = novoInicio;
+                if (ini && fim) {
+                    const duracao = Math.max(0, diferencaDias(analisarData(ini), analisarData(fim)));
+                    novoFim = paraISO(adicionarDias(analisarData(novoInicio), duracao));
+                } else if (fim && fim >= novoInicio) {
+                    novoFim = fim;
+                }
+
+                if (ini !== novoInicio || fim !== novoFim) {
+                    t.planned = [novoInicio, novoFim];
+                    t.reagendada = true;
+                    mudou = true;
+                    alteradas.add(t.id);
+                }
+
+                forcar.add(t.id);
+                sucessorasSemInicio(t.id, listaTarefas).forEach((id) => forcar.add(id));
+            });
+
+            if (!mudou) break;
+        }
+
+        return Array.from(alteradas);
+    }
+
     function salvarValorNoEstado(inputEl) {
         const $input = $(inputEl);
         const $row = $input.closest("tr");
@@ -443,7 +480,6 @@ $(function () {
             if (!task[field]) task[field] = ["", ""];
             task[field][index] = val;
 
-            // REGRA: Ao preencher a data de Fim Real (index 1), define o progresso para 100% automaticamente
             if (field === "real" && index === 1 && val.trim() !== "") {
                 task.progress = 100;
             }
@@ -582,7 +618,7 @@ $(function () {
 
         return estado.tasks
             .filter((t) => !t.group && t.id !== tarefaAtual.id && !dependeDe(t.id, tarefaAtual.id))
-            .map((t) => `<option value="${t.id}"${selecionadas.includes(t.id) ? " selected" : ""}>${escaparHtml(`${t.no} —${t.name}`)}</option>`)
+            .map((t) => `<option value="${t.id}"${selecionadas.includes(t.id) ? " selected" : ""}>${escaparHtml(`${t.no} — ${t.name}`)}</option>`)
             .join("");
     }
 
@@ -650,9 +686,6 @@ $(function () {
         `;
     }
 
-    // ---------------------------------------------------------------
-    // FUNÇÃO AUXILIAR: IDENTIFICAÇÃO DE MARCOS (0 DIAS DE DURAÇÃO)
-    // ---------------------------------------------------------------
     function ehMarco(tarefa, inicio, fim) {
         if (tarefa.group) return false;
         if (tarefa.isMilestone) return true;
@@ -664,6 +697,43 @@ $(function () {
         const dIni = analisarData(inicio);
         const dFim = analisarData(dataFim);
         return dIni && dFim && diferencaDias(dIni, dFim) === 0;
+    }
+
+    function obterFimMaximoProjeto(tasks) {
+        let maxData = null;
+        tasks.forEach((t) => {
+            const fim = t.real?.[1] || t.planned?.[1];
+            if (fim) {
+                const d = analisarData(fim);
+                if (d && (!maxData || d > maxData)) maxData = d;
+            }
+        });
+        return maxData;
+    }
+
+    function exibirModalConfirmacaoAjuste(diasDiff, dependentesQtd) {
+        let textoImpacto = "";
+        if (diasDiff < 0) {
+            textoImpacto = `O projeto terá um adiantamento de <strong>${Math.abs(diasDiff)} dias</strong>.`;
+        } else if (diasDiff > 0) {
+            textoImpacto = `O projeto terá um atraso de <strong>${diasDiff} dias</strong>.`;
+        } else {
+            textoImpacto = `O prazo final do projeto permanecerá o mesmo.`;
+        }
+
+        let textoDep = "";
+        if (dependentesQtd > 0) {
+            textoDep = `${dependentesQtd} atividade${dependentesQtd > 1 ? "s dependentes serão movidas" : " dependente será movida"} junto.`;
+        } else {
+            textoDep = `Nenhuma outra atividade dependente foi afetada.`;
+        }
+
+        $("#modalAjusteTextoImpacto").html(textoImpacto);
+        $("#modalAjusteTextoDependentes").text(textoDep);
+
+        const modalEl = document.getElementById("modalConfirmarAjuste");
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.show();
     }
 
     // ---------------------------------------------------------------
@@ -679,7 +749,7 @@ $(function () {
     }
 
     function renderizarEsquerda() {
-        const $body =$("#leftBody").empty();
+        const $body = $("#leftBody").empty();
 
         estado.tasks.forEach((tarefa) => {
             const isGroup = tarefa.group;
@@ -770,9 +840,6 @@ $(function () {
         `);
     }
 
-    // ---------------------------------------------------------------
-    // RENDERIZAÇÃO DA TIMELINE E GRÁFICO (COM SUPORTE A MARCOS)
-    // ---------------------------------------------------------------
     function renderizarDireita() {
         const p = periodos();
         const totalWidth = p.arr.length * p.cfg.width;
@@ -785,7 +852,7 @@ $(function () {
         headerHtml += `</div>`;
         $("#timelineHeader").html(headerHtml);
 
-        const $body =$("#timelineBody").empty().css({ width: `${totalWidth}px`, position: "relative" });
+        const $body = $("#timelineBody").empty().css({ width: `${totalWidth}px`, position: "relative" });
         const posHoje = posicaoParaData(paraISO(new Date()));
 
         estado.tasks.forEach((tarefa) => {
@@ -796,7 +863,6 @@ $(function () {
                 $row.append(`<div class="today-line" style="left:${posHoje}px;"></div>`);
             }
 
-            // 1. DESENHO DA LINHA DE BASE (BASELINE)
             const baselineDates = resumo
                 ? (compararLinhaBase ? resumo.baseline : resumo.planned)
                 : (compararLinhaBase ? (tarefa.baseline || tarefa.planned) : tarefa.planned);
@@ -826,7 +892,6 @@ $(function () {
                 }
             }
 
-            // 2. DESENHO DA EXECUÇÃO / PLANEJADO (BARRA OU LOSANGO)
             const datasReal = resumo ? resumo.real : (tarefa.real || []);
             const dataInicioBarra = datasReal[0] || (!tarefa.group ? tarefa.planned?.[0] : "");
 
@@ -944,7 +1009,7 @@ $(function () {
     // EVENTOS
     // ---------------------------------------------------------------
 
-    $(document).on("input", ".activity-input, .progress-input, .date-input", function () {
+    $(document).on("input", ".activity-input, .progress-input", function () {
         salvarValorNoEstado(this);
     });
 
@@ -953,27 +1018,71 @@ $(function () {
         renderizar();
     });
 
-    // Digitação no input de progresso atualiza o estado em tempo real
-    $(document).on("input", ".progress-input", function () {
-        salvarValorNoEstado(this);
-    });
-
-    // Alteração final no progresso ou data dispara recálculo dos grupos e do gráfico
     $(document).on("change", ".progress-input", function () {
         salvarValorNoEstado(this);
         renderizar();
     });
 
-    // Atualização de datas: re-renderiza e dispara o reagendamento em cadeia (tanto para planned quanto para real)
+    $(document).on("focusin", ".date-input", function () {
+        valorAnteriorInput = $(this).val();
+    });
+
+    // Intercepta a alteração na data e avalia o impacto no cronograma
     $(document).on("change", ".date-input", function () {
-        const res = salvarValorNoEstado(this);
-        if (!res) return;
+        const inputEl = this;
+        const $input =$(inputEl);
+        const $row =$input.closest("tr");
+        const id = Number($row.data("id"));
+        const task = buscarTarefa(id);
+        if (!task) return;
 
-        const partes = res.val.split("-");
-        if (res.val && !(partes.length === 3 && partes[0].length === 4)) return;
+        const val = $input.val().trim();
+        if (val !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(val)) return;
 
-        reagendar([res.task.id]);
-        renderizar(); // Atualiza os percentuais dos grupos e as barras no Gantt
+        const field = $input.data("field");
+        const index = Number($input.data("index"));
+
+        // SIMULAÇÃO: Clona as tarefas para prever o reagendamento em cadeia
+        const cloneTasks = JSON.parse(JSON.stringify(estado.tasks));
+        const draftTask = cloneTasks.find((t) => t.id === id);
+
+        if (draftTask) {
+            if (!draftTask[field]) draftTask[field] = ["", ""];
+            draftTask[field][index] = val;
+        }
+
+        const maxDataAntes = obterFimMaximoProjeto(estado.tasks);
+
+        // Executa simulação de reagendamento no clone
+        const afetadas = reagendarSimulacao(cloneTasks, [id]);
+        const maxDataDepois = obterFimMaximoProjeto(cloneTasks);
+
+        let diferencaDiasProjeto = 0;
+        if (maxDataAntes && maxDataDepois) {
+            diferencaDiasProjeto = diferencaDias(maxDataAntes, maxDataDepois);
+        }
+
+        const qtdDependentesAfetadas = Math.max(0, afetadas.length - 1);
+
+        if (diferencaDiasProjeto !== 0 || qtdDependentesAfetadas > 0) {
+            acaoPendenteAjuste = {
+                inputEl,
+                executar: () => {
+                    salvarValorNoEstado(inputEl);
+                    reagendar([id]);
+                    renderizar();
+                },
+                cancelar: () => {
+                    $input.val(valorAnteriorInput);
+                }
+            };
+
+            exibirModalConfirmacaoAjuste(diferencaDiasProjeto, qtdDependentesAfetadas);
+        } else {
+            salvarValorNoEstado(inputEl);
+            reagendar([id]);
+            renderizar();
+        }
     });
 
     $(document).on("input", ".activity-input", function () {
@@ -996,7 +1105,22 @@ $(function () {
         $(".pred-select").multipleSelect("refresh");
     });
 
-    // --- Adicionar e excluir ---
+    $(document).on("click", "#btnConfirmarAjusteData", function () {
+        if (acaoPendenteAjuste && typeof acaoPendenteAjuste.executar === "function") {
+            acaoPendenteAjuste.executar();
+            acaoPendenteAjuste = null;
+        }
+        const modalEl = document.getElementById("modalConfirmarAjuste");
+        const modal = bootstrap.Modal.getInstance(modalEl);
+        if (modal) modal.hide();
+    });
+
+    $(document).on("click", "#btnCancelarAjusteData", function () {
+        if (acaoPendenteAjuste && typeof acaoPendenteAjuste.cancelar === "function") {
+            acaoPendenteAjuste.cancelar();
+            acaoPendenteAjuste = null;
+        }
+    });
 
     $(document).on("click", '[data-gantt-btn="addAtividade"]', function () {
         proximoId++;
@@ -1119,8 +1243,6 @@ $(function () {
         renderizar();
     });
 
-    // --- Barra de ferramentas: escala, colunas e navegação ---
-
     $(".view-switch button").on("click", function () {
         $(".view-switch button").removeClass("active");
         $(this).addClass("active");
@@ -1148,8 +1270,6 @@ $(function () {
         $('[data-gantt-btn="prev"]').prop("disabled", scrollLeft <= 0);
         $('[data-gantt-btn="next"]').prop("disabled", scrollLeft >= maxScroll - 1);
     });
-
-    // --- Linha de base ---
 
     $('[data-gantt-btn="saveBeseline"]').on("click", function () {
         estado.tasks.forEach((t) => {
@@ -1212,7 +1332,6 @@ $(function () {
         }
     });
 
-    // --- Sincronização de rolagem ---
     $("#leftScroll").on("scroll", function () {
         $("#rightScroll").scrollTop($(this).scrollTop());
         if (predAberto) $(predAberto).multipleSelect("close");
@@ -1222,10 +1341,6 @@ $(function () {
         $("#leftScroll").scrollTop($(this).scrollTop());
         $("#rightHeaderScroll").scrollLeft($(this).scrollLeft());
     });
-
-    // ---------------------------------------------------------------
-    // INICIALIZAÇÃO
-    // ---------------------------------------------------------------
 
     renderizar();
 });
