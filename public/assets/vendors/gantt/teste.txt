@@ -1,3 +1,5 @@
+2. Atividade atrasada: o sistema comparar automaticamente com a data atual. Se uma atividade já deveria ter terminado e não terminou, ela já deveria aparecer como atrasada.
+
 // Utilitário rápido para gerar datas relativas a HOJE no teste
 const dataRelativa = (dias) => {
     const d = new Date();
