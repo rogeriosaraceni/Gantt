@@ -1,10 +1,8 @@
 <div class="d-flex justify-content-between align-items-center flex-wrap gantt-toolbar mb-2">
     <div class="d-flex align-items-center gap-3 flex-wrap">
-        <div class="btn-group view-switch" role="group" aria-label="Escala">
-            <button type="button" class="btn btn-sm" data-scale="week">Semana</button>
-            <button type="button" class="btn btn-sm active" data-scale="month">Mês</button>
-            <button type="button" class="btn btn-sm" data-scale="year">Ano</button>
-        </div>
+        <button type="button" class="btn btn-dark" style="font-size: 0.9rem;" data-gantt-btn="addAtividade">
+            <i class="bi bi-plus-lg me-1"></i>Incluir Nova Atividade
+        </button>
 
         <div class="legend d-flex gap-3 flex-wrap">
             <span>
@@ -27,7 +25,7 @@
 
     <div class="d-flex align-items-center gap-2 flex-wrap">
         <div class="dropdown">
-            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
                 <i class="bi bi-funnel me-1"></i>Colunas
             </button>
             <div class="dropdown-menu dropdown-menu-end shadow-sm p-2 column-menu">
@@ -52,28 +50,30 @@
                     <label class="form-check-label" for="colProgress">%</label>
                 </div>
                 <hr class="my-2" />
-                <button type="button" class="btn btn-light btn-sm w-100" data-bs-toggle="dropdown">Fechar</button>
+                <button type="button" class="btn btn-light w-100" data-bs-toggle="dropdown">Fechar</button>
             </div>
         </div>
 
-        <button type="button" class="btn btn-sm btn-outline-secondary" data-gantt-btn="compare">
+        <button type="button" class="btn btn-outline-secondary" data-gantt-btn="compare">
             <i class="bi bi-arrow-up-right me-1"></i>Comparar linha de base
         </button>
 
-        <button type="button" class="btn btn-sm btn-light" data-gantt-btn="saveBeseline">
+        <button type="button" class="btn btn-light" data-gantt-btn="saveBeseline">
             <i class="bi bi-shield-check me-1"></i>Salvar linha de base
         </button>
 
-        <button type="button" class="btn btn-sm btn-outline-secondary" data-gantt-btn="prev" disabled>
+        <button type="button" class="btn btn-outline-secondary" data-gantt-btn="prev" disabled>
             <i class="bi bi-chevron-left"></i>
         </button>
 
-        <button type="button" class="btn btn-sm btn-outline-secondary" data-gantt-btn="next">
+        <button type="button" class="btn btn-outline-secondary" data-gantt-btn="next">
             <i class="bi bi-chevron-right"></i>
         </button>
 
-        <button type="button" class="btn btn-sm btn-success" data-gantt-btn="addAtividade">
-            <i class="bi bi-plus-lg me-1"></i>Incluir atividade
-        </button>
+        <div class="btn-group view-switch" role="group" aria-label="Escala">
+            <button type="button" class="btn btn-sm" data-scale="week">Semana</button>
+            <button type="button" class="btn active" data-scale="month">Mês</button>
+            <button type="button" class="btn btn-sm" data-scale="year">Ano</button>
+        </div>
     </div>
 </div>
