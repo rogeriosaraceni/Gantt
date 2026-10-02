@@ -442,8 +442,13 @@ $(function () {
             const index = Number($input.data("index"));
             if (!task[field]) task[field] = ["", ""];
             task[field][index] = val;
+
+            // REGRA: Ao preencher a data de Fim Real (index 1), define o progresso para 100% automaticamente
+            if (field === "real" && index === 1 && val.trim() !== "") {
+                task.progress = 100;
+            }
         } else if (field === "progress") {
-            task.progress = Number(val);
+            task.progress = Math.min(100, Math.max(0, Number(val) || 0));
         } else if (field === "pred") {
             task.pred = (val || []).map(Number).filter((pid) => pid !== task.id && !dependeDe(pid, task.id));
         } else {
@@ -891,6 +896,17 @@ $(function () {
         renderizar();
     });
 
+    // Digitação no input de progresso atualiza o estado em tempo real
+    $(document).on("input", ".progress-input", function () {
+        salvarValorNoEstado(this);
+    });
+
+    // Alteração final no progresso ou data dispara recálculo dos grupos e do gráfico
+    $(document).on("change", ".progress-input", function () {
+        salvarValorNoEstado(this);
+        renderizar();
+    });
+
     // Atualização de datas: re-renderiza e dispara o reagendamento em cadeia (tanto para planned quanto para real)
     $(document).on("change", ".date-input", function () {
         const res = salvarValorNoEstado(this);
@@ -900,12 +916,7 @@ $(function () {
         if (res.val && !(partes.length === 3 && partes[0].length === 4)) return;
 
         reagendar([res.task.id]);
-        renderizar();
-    });
-
-    $(document).on("change", ".progress-input", function () {
-        salvarValorNoEstado(this);
-        renderizar();
+        renderizar(); // Atualiza os percentuais dos grupos e as barras no Gantt
     });
 
     $(document).on("input", ".activity-input", function () {
