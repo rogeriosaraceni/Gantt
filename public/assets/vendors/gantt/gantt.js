@@ -187,13 +187,25 @@ $(function () {
         if (tarefa.group) return filhasDoGrupo(tarefa).some(verificarAtraso);
 
         const dataFimPlan = analisarData(tarefa.planned?.[1]);
+        if (!dataFimPlan) return false;
+
         const dataFimReal = analisarData(tarefa.real?.[1]);
+        const progresso = Number(tarefa.progress) || 0;
+
         const hoje = new Date();
         hoje.setHours(0, 0, 0, 0);
 
-        if (!dataFimPlan) return false;
-        if (dataFimReal && dataFimReal > dataFimPlan) return true;
-        if (!dataFimReal && tarefa.real?.[0] && hoje > dataFimPlan && (tarefa.progress ?? 0) < 100) return true;
+        // Caso 2: Tarefa concluída com data final real posterior ao planejado
+        if (dataFimReal && dataFimReal > dataFimPlan) {
+            return true;
+        }
+
+        // Caso 1: Data planejada já passou e a tarefa NÃO foi concluída
+        // (Só é "não concluída" se NÃO tiver data real E o progresso for < 100%)
+        const naoConcluida = progresso < 100 && !dataFimReal;
+        if (hoje > dataFimPlan && naoConcluida) {
+            return true;
+        }
 
         return false;
     }

@@ -1,0 +1,57 @@
+// Utilitário rápido para gerar datas relativas a HOJE no teste
+const dataRelativa = (dias) => {
+    const d = new Date();
+    d.setDate(d.getDate() + dias);
+    return d.toISOString().split("T")[0];
+};
+
+// Substitua temporariamente o array estado.tasks por este para simular:
+estado.tasks = [
+    {
+        id: 1,
+        no: "1",
+        name: "1. Módulo de Autenticação",
+        group: true
+    },
+    {
+        id: 2,
+        no: "1.1",
+        name: "Criar Tela de Login (Vencida e nem começou)",
+        owner: "Ricardo Alves",
+        planned: [dataRelativa(-10), dataRelativa(-3)], // Venceu há 3 dias
+        real: ["", ""],
+        progress: 0,
+        group: false
+    },
+    {
+        id: 3,
+        no: "1.2",
+        name: "Integração OAuth (Em andamento mas atrasada)",
+        owner: "Ana Paula Silva",
+        planned: [dataRelativa(-8), dataRelativa(-2)], // Venceu há 2 dias
+        real: [dataRelativa(-8), ""],                  // Começou mas não terminou
+        progress: 50,
+        group: false
+    },
+    {
+        id: 4,
+        no: "1.3",
+        name: "Validação de Tokens (Crítica e Atrasada)",
+        owner: "Thiago Souza",
+        planned: [dataRelativa(-5), dataRelativa(-1)], // Venceu ontem
+        real: [dataRelativa(-5), ""],
+        progress: 20,
+        critical: true,                                // Item do Caminho Crítico
+        group: false
+    },
+    {
+        id: 5,
+        no: "1.4",
+        name: "Testes de Carga (Dentro do Prazo)",
+        owner: "Camila Ferreira",
+        planned: [dataRelativa(0), dataRelativa(5)],   // Vence daqui a 5 dias
+        real: [dataRelativa(0), ""],
+        progress: 10,
+        group: false
+    }
+];
