@@ -123,6 +123,59 @@ $(function () {
         return filhas;
     }
 
+    function ordenarTarefasPorData() {
+        const grupos = [];
+        let grupoAtual = null;
+
+        // Agrupa tarefas mantendo a associação com seus respectivos grupos
+        estado.tasks.forEach((t) => {
+            if (t.group) {
+                grupoAtual = { grupo: t, filhas: [] };
+                grupos.push(grupoAtual);
+            } else if (grupoAtual) {
+                grupoAtual.filhas.push(t);
+            } else {
+                grupoAtual = { grupo: null, filhas: [t] };
+                grupos.push(grupoAtual);
+            }
+        });
+
+        // Comparador de datas ISO (mais recente primeiro; sem data no final)
+        const compararDatasDesc = (dataA, dataB) => {
+            if (!dataA && !dataB) return 0;
+            if (!dataA) return 1;
+            if (!dataB) return -1;
+            return dataB.localeCompare(dataA);
+        };
+
+        const obterInicioGrupo = (g) => {
+            if (g.grupo?.planned?.[0]) return g.grupo.planned[0];
+            const datas = g.filhas.map((f) => f.planned?.[0]).filter(Boolean).sort();
+            return datas[0] || "";
+        };
+
+        // 1. Ordena as filhas dentro de cada grupo (mais recente primeiro)
+        grupos.forEach((g) => {
+            g.filhas.sort((a, b) => compararDatasDesc(a.planned?.[0], b.planned?.[0]));
+        });
+
+        // 2. Ordena os grupos pela data de início (mais recente primeiro)
+        grupos.sort((a, b) => {
+            const dtA = obterInicioGrupo(a);
+            const dtB = obterInicioGrupo(b);
+            return compararDatasDesc(dtA, dtB);
+        });
+
+        // 3. Reconstrói o array plano de tarefas
+        const novasTasks = [];
+        grupos.forEach((g) => {
+            if (g.grupo) novasTasks.push(g.grupo);
+            g.filhas.forEach((f) => novasTasks.push(f));
+        });
+
+        estado.tasks = novasTasks;
+    }
+
     function recalcularNumeracao() {
         let contadorGrupo = 0;
         let contadorFilha = 0;
@@ -988,6 +1041,7 @@ $(function () {
         $("#leftBody").empty();
         $("#rightBody").empty();
 
+        ordenarTarefasPorData();
         recalcularNumeracao();
         calcularCaminhoCritico();
         renderizarEsquerda();
