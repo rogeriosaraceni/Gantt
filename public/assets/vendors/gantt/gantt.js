@@ -24,10 +24,12 @@ $(function () {
         "Patrícia Gomes"
     ];
 
+    const selecionados = new Set();
+
     let escalaAtual = "month";
     let compararLinhaBase = false;
     let proximoId = 100;
-    let idParaExcluir = null;
+    let idsParaExcluir = [];
     let periodosCache = null;
     let predAberto = null;
     let acaoPendenteAjuste = null;
@@ -254,6 +256,41 @@ $(function () {
         }
 
         return false;
+    }
+
+    // ---------------------------------------------------------------
+    // SELEÇÃO EM LOTE (CHECKBOXES)
+    // ---------------------------------------------------------------
+
+    // Remove ids que não existem mais e deixa cada atividade marcada
+    // somente quando todas as tarefas abaixo dela estão marcadas.
+    function sincronizarSelecao() {
+        const idsExistentes = new Set(estado.tasks.map((t) => t.id));
+        selecionados.forEach((id) => !idsExistentes.has(id) && selecionados.delete(id));
+
+        estado.tasks.filter((t) => t.group).forEach((grupo) => {
+            const filhas = filhasDoGrupo(grupo);
+            if (!filhas.length) return;
+            filhas.every((f) => selecionados.has(f.id)) ? selecionados.add(grupo.id) : selecionados.delete(grupo.id);
+        });
+    }
+
+    // Reflete a seleção na tela (checked, indeterminate e botão Excluir do topo)
+    function atualizarSelecaoNaTela() {
+        $("#leftBody .row-check").each(function () {
+            const id = Number($(this).data("id"));
+            const tarefa = buscarTarefa(id);
+            const filhas = tarefa?.group ? filhasDoGrupo(tarefa) : [];
+            const qtdMarcadas = filhas.filter((f) => selecionados.has(f.id)).length;
+
+            this.checked = selecionados.has(id);
+            this.indeterminate = qtdMarcadas > 0 && qtdMarcadas < filhas.length;
+        });
+
+        const total = selecionados.size;
+        $("#btnExcluirSelecionados")
+            .prop("disabled", !total)
+            .html(`<i class="bi bi-trash"></i> Excluir${total ? ` (${total})` : ""}`);
     }
 
     // ---------------------------------------------------------------
@@ -704,20 +741,16 @@ $(function () {
     }
 
     function acoesHtml(t) {
+        const rotulo = t.group ? "Selecionar atividade e todas as suas tarefas" : "Selecionar tarefa";
         return `
             <div class="d-flex justify-content-center align-items-center">
-                <button
-                    type="button"
-                    class="btn btn-link text-danger p-0 border-0"
-                    data-btn="delSubTarefa"
+                <input
+                    type="checkbox"
+                    class="form-check-input row-check m-0"
                     data-id="${t.id}"
-                    data-bs-toggle="tooltip"
-                    data-bs-container="body"
-                    data-bs-title="${t.group ? "Excluir atividade" : "Excluir tarefa"}"
-                    aria-label="${t.group ? "Excluir atividade" : "Excluir tarefa"}"
+                    title="${rotulo}"
+                    aria-label="${rotulo}"
                 >
-                    <i class="bi bi-trash fs-6"></i>
-                </button>
             </div>
         `;
     }
@@ -878,6 +911,8 @@ $(function () {
         });
 
         atualizarVisibilidadeColunas();
+        sincronizarSelecao();
+        atualizarSelecaoNaTela();
     }
 
     function desenharSetas($body, totalWidth, linhas) {
@@ -1301,33 +1336,56 @@ $(function () {
         }
     });
 
-    $(document).on("click", '[data-btn="delSubTarefa"]', function () {
+    // Marcar/desmarcar: a atividade arrasta todas as tarefas abaixo dela
+    $(document).on("change", ".row-check", function () {
         const id = Number($(this).data("id"));
-        const task = buscarTarefa(id);
-        if (!task) return;
+        const tarefa = buscarTarefa(id);
+        if (!tarefa) return;
 
-        idParaExcluir = id;
+        const ids = [id, ...(tarefa.group ? filhasDoGrupo(tarefa).map((f) => f.id) : [])];
+        ids.forEach((i) => (this.checked ? selecionados.add(i) : selecionados.delete(i)));
+
+        sincronizarSelecao();
+        atualizarSelecaoNaTela();
+    });
+
+    // Botão "Excluir" do topo: abre a confirmação para tudo que está marcado
+    $(document).on("click", "#btnExcluirSelecionados", function () {
+        const marcadas = estado.tasks.filter((t) => selecionados.has(t.id));
+        if (!marcadas.length) return;
+
+        const ids = new Set();
+        marcadas.forEach((t) => {
+            ids.add(t.id);
+            if (t.group) filhasDoGrupo(t).forEach((f) => ids.add(f.id));
+        });
+        idsParaExcluir = Array.from(ids);
+
+        const grupos = marcadas.filter((t) => t.group);
+        const qtd = idsParaExcluir.length;
 
         const $modalTitle =$("#deleteActivityModalLabel");
         const $iconContainer =$("#deleteActivityModal .delete-modal-icon");
         const $msgText =$("#deleteActivityModal .modal-body p:last");
 
-        $("#deleteActivityName").text(task.name);
+        $("#deleteActivityName").text(qtd === 1 ? marcadas[0].name : `${qtd} itens selecionados`);
 
-        if (task.group) {
-            $modalTitle.text("Excluir grupo");
+        if (grupos.length) {
+            $modalTitle.text(grupos.length > 1 ? "Excluir grupos" : "Excluir grupo");
             $iconContainer.html('<i class="bi bi-exclamation-triangle-fill text-danger fs-1"></i>');
             $msgText
                 .removeClass("text-secondary")
                 .addClass("text-danger fw-semibold")
-                .text("Atenção: Ao excluir este grupo, TODAS as subtarefas vinculadas a ele também serão excluídas!");
+                .text(grupos.length > 1
+                    ? "Atenção: Ao excluir estes grupos, TODAS as subtarefas vinculadas a eles também serão excluídas!"
+                    : "Atenção: Ao excluir este grupo, TODAS as subtarefas vinculadas a ele também serão excluídas!");
         } else {
-            $modalTitle.text("Excluir atividade");
+            $modalTitle.text(qtd > 1 ? "Excluir atividades" : "Excluir atividade");
             $iconContainer.html('<i class="bi bi-trash3 fs-1"></i>');
             $msgText
                 .removeClass("text-danger fw-semibold")
                 .addClass("text-secondary")
-                .text("Tem certeza que deseja excluir esta atividade?");
+                .text(qtd > 1 ? `Tem certeza que deseja excluir estas ${qtd} atividades?` : "Tem certeza que deseja excluir esta atividade?");
         }
 
         const modalEl = document.getElementById("deleteActivityModal");
@@ -1337,27 +1395,16 @@ $(function () {
     });
 
     $("#btnConfirmDelete").on("click", function () {
-        if (!idParaExcluir) return;
+        if (!idsParaExcluir.length) return;
 
-        const index = estado.tasks.findIndex((t) => t.id === idParaExcluir);
-        if (index === -1) return;
-
-        let qtdParaRemover = 1;
-
-        if (estado.tasks[index].group) {
-            while (
-                index + qtdParaRemover < estado.tasks.length &&
-                !estado.tasks[index + qtdParaRemover].group
-            ) {
-                qtdParaRemover++;
-            }
-        }
-
-        const idsRemovidos = estado.tasks.splice(index, qtdParaRemover).map((t) => t.id);
+        const removidos = new Set(idsParaExcluir);
+        estado.tasks = estado.tasks.filter((t) => !removidos.has(t.id));
 
         estado.tasks.forEach((t) => {
-            t.pred = (t.pred || []).filter((pid) => !idsRemovidos.includes(pid));
+            t.pred = (t.pred || []).filter((pid) => !removidos.has(pid));
         });
+
+        removidos.forEach((id) => selecionados.delete(id));
 
         reordenarNumeracao();
 
@@ -1367,7 +1414,7 @@ $(function () {
             if (modalInstance) modalInstance.hide();
         }
 
-        idParaExcluir = null;
+        idsParaExcluir = [];
         renderizar();
     });
 

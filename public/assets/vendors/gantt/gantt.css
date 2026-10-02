@@ -104,6 +104,12 @@ gantt-shell / gantt-layout
     max-height: calc(100vh - 120px);
 }
 
+.row-check {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
 /*-----------------------------------------------------
 gantt-left - BLOCO CONGELADO
 ------------------------------------------------------*/
