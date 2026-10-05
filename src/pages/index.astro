@@ -1,11 +1,14 @@
 ---
 import Layout from "../layouts/Layout.astro";
 
+import "../gantt.css";
+
 import GanttPainel from "./_gantt-painel.astro";
 import GanttList from "./_gantt-list.astro";
 import ModalExcluir from "./modals/excluir.astro";
 import ModalLinhaBase from "./modals/linha-base.astro";
 import ModalConfirmacao from "./modals/confirmacao.astro";
+import GanttScript from "./_gant-script.astro";
 ---
 
 <Layout>
@@ -15,4 +18,5 @@ import ModalConfirmacao from "./modals/confirmacao.astro";
     <ModalExcluir />
     <ModalLinhaBase />
     <ModalConfirmacao />
+    <GanttScript />
 </Layout>
