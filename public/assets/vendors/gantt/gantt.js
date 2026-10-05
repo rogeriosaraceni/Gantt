@@ -26,6 +26,9 @@ $(function () {
 
     const selecionados = new Set();
 
+    // Risco: diferença (em pontos percentuais) entre o progresso esperado pelo tempo decorrido e o real
+    const LIMITE_RISCO_PROGRESSO = 25;
+
     let escalaAtual = "month";
     let compararLinhaBase = false;
     let proximoId = 100;
@@ -256,6 +259,44 @@ $(function () {
         }
 
         return false;
+    }
+
+    const tarefaConcluida = (tarefa) => (Number(tarefa?.progress) || 0) >= 100 || !!tarefa?.real?.[1];
+
+    // Impedimento: o início planejado já chegou, a tarefa não começou e alguma predecessora ainda não terminou
+    function verificarImpedimento(tarefa) {
+        if (tarefa.group) return filhasDoGrupo(tarefa).some(verificarImpedimento);
+
+        const inicioPlan = tarefa.planned?.[0];
+        const naoIniciada = !tarefa.real?.[0] && !(Number(tarefa.progress) > 0);
+        if (!inicioPlan || !naoIniciada || tarefaConcluida(tarefa) || inicioPlan > paraISO(new Date())) return false;
+
+        return (tarefa.pred || [])
+            .map(buscarTarefa)
+            .filter(Boolean)
+            .some((pred) => !tarefaConcluida(pred));
+    }
+
+    // Risco (ainda sem atraso nem impedimento): predecessora atrasada ou progresso abaixo do esperado
+    function verificarRisco(tarefa) {
+        if (tarefa.group) return filhasDoGrupo(tarefa).some(verificarRisco);
+        if (tarefaConcluida(tarefa) || verificarAtraso(tarefa) || verificarImpedimento(tarefa)) return false;
+
+        if ((tarefa.pred || []).map(buscarTarefa).filter(Boolean).some(verificarAtraso)) return true;
+
+        const [ini, fim] = tarefa.planned || [];
+        if (!ini || !fim) return false;
+
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        const dataIni = analisarData(ini);
+        if (hoje < dataIni) return false;
+
+        const duracao = diferencaDias(dataIni, analisarData(fim)) + 1;
+        const esperado = Math.min(100, ((diferencaDias(dataIni, hoje) + 1) / duracao) * 100);
+
+        return esperado - (Number(tarefa.progress) || 0) > LIMITE_RISCO_PROGRESSO;
     }
 
     // ---------------------------------------------------------------
@@ -870,6 +911,8 @@ $(function () {
                 ? filhasDoGrupo(tarefa).some((f) => verificarAtraso(f) && f.critical)
                 : emAtraso && tarefa.critical;
             const atrasadoNormal = emAtraso && !criticoAtrasado;
+            const impedido = verificarImpedimento(tarefa);
+            const emRisco = verificarRisco(tarefa);
             const resumo = isGroup ? resumoGrupo(tarefa) : null;
             const somenteLeitura = (texto) => `<span class="small text-secondary">${texto}</span>`;
 
@@ -884,6 +927,8 @@ $(function () {
                             <input type="text" name="atividade" class="activity-input" data-field="name" data-id="${tarefa.id}" value="${escaparHtml(tarefa.name)}" ${isGroup ? 'style="font-weight:600"' : ""}>
                             ${criticoAtrasado ? '<i class="bi bi-exclamation-triangle-fill status-critical" data-bs-toggle="tooltip" data-bs-title="Caminho Crítico"></i>' : ""}
                             ${atrasadoNormal ? '<i class="bi bi-fire status-overdue" data-bs-toggle="tooltip" data-bs-title="Real Atrasado"></i>' : ""}
+                            ${impedido ? '<i class="bi bi-stop-circle-fill legend-blocked" data-bs-toggle="tooltip" data-bs-title="Impedimento: aguardando predecessora"></i>' : ""}
+                            ${emRisco ? '<i class="bi bi-exclamation-circle-fill legend-risk" data-bs-toggle="tooltip" data-bs-title="Risco de atraso"></i>' : ""}
                             ${tarefa.reagendada ? '<i class="bi bi-arrow-repeat text-info" data-bs-toggle="tooltip" data-bs-title="Data ajustada pela predecessora"></i>' : ""}
                         </div>
                     </td>
@@ -1018,11 +1063,15 @@ $(function () {
             }
 
             const datasReal = resumo ? resumo.real : (tarefa.real || []);
-            const dataInicioBarra = datasReal[0] || (!tarefa.group ? tarefa.planned?.[0] : "");
+            const marcoPlanejado = !tarefa.group && ehMarco(tarefa, tarefa.planned?.[0], tarefa.planned?.[1]);
+            const dataInicioBarra = datasReal[0] || (marcoPlanejado ? tarefa.planned?.[0] : "");
 
             if (dataInicioBarra) {
-                const dataFimBarra = datasReal[1] || (tarefa.planned?.[1] ? tarefa.planned[1] : dataInicioBarra);
-                const marco = ehMarco(tarefa, dataInicioBarra, dataFimBarra);
+                const hojeISO = paraISO(new Date());
+                const realAberto = !!datasReal[0] && !datasReal[1];
+                const dataFimBarra = datasReal[1]
+                    || (datasReal[0] ? (hojeISO > datasReal[0] ? hojeISO : datasReal[0]) : (tarefa.planned?.[1] || dataInicioBarra));
+                const marco = (!realAberto || tarefa.isMilestone) && ehMarco(tarefa, dataInicioBarra, dataFimBarra);
                 const emAtraso = verificarAtraso(tarefa);
                 const criticoAtrasado = tarefa.group
                     ? filhasDoGrupo(tarefa).some((f) => verificarAtraso(f) && f.critical)

@@ -52,8 +52,15 @@ legend
 ------------------------------------------------------*/
 .legend {
     color: var(--g-muted);
-    font-size: 11px;
+    font-size: 12px;
 }
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    line-height: 1;
+}
+
 .legend-dot {
     display: inline-block;
     width: 10px;
@@ -81,6 +88,12 @@ legend
 }
 .legend-atrasado{
     background-color: var(--g-atrasado);
+}
+.legend-blocked {
+    color: #dc3545;
+}
+.legend-risk {
+    color: #d4a017;
 }
 .legend-hoje{
     background-color: var(--bs-primary);
@@ -499,6 +512,7 @@ modal
 .status-overdue {
     color: var(--g-atrasado);
 }
+
 
 /* Estilo Base do Marco (Losango) */
 .milestone-diamond {

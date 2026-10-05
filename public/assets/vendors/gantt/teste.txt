@@ -160,3 +160,27 @@ const estadoExemplo = {
         }
     ]
 };
+
+
+-------------------------------------------------------------------------------------------------------------
+
+6. Símbolos de atraso, impedimento e risco: seria importante diferenciar visualmente esses três indicadores, pois no arquivo que te enviei, o fogo era impedimento, não vejo problemas em usá-lo para atraso, mas para riscos e impedimentos temos que pensar como será.
+
+Ícone	Aparece quando
+🔥 Atraso (já existia)	Passou do fim planejado sem concluir, ou o fim real passou do planejado.
+⚠️ Caminho crítico (já existia)	Está atrasada e é crítica.
+🛑 Impedimento (novo)	A tarefa não foi iniciada (sem início real e 0%), a data de início planejada já chegou e alguma predecessora ainda não terminou.
+🔶 Risco (novo)	A tarefa ainda não está atrasada nem impedida e acontece uma destas duas coisas: (a) uma predecessora está atrasada, ou (b) o progresso está mais de 25 pontos percentuais abaixo do esperado para o tempo decorrido.
+
+Uma predecessora conta como terminada quando tem fim real ou 100%. Tarefa concluída nunca recebe impedimento nem risco. Na linha da atividade (grupo), o ícone aparece se alguma tarefa filha se enquadrar.
+
+Exemplo para simular
+Tarefa B depende de A. A termina dia 10 e não foi concluída.
+Antes do dia 10, com A atrasada: B mostra 🔶 risco.
+Se o início planejado de B já chegou e A não terminou: B mostra 🛑 impedimento.
+
+Em um prazo de 10 dias, quando 50% do tempo já passou, o esperado é 50%. Se o progresso está em 20%, a diferença é de 30 pontos, então aparece o risco.
+
+Ajustes
+
+O limite de 25 pontos fica na constante LIMITE_RISCO_PROGRESSO, no topo do arquivo. Se o cliente achar sensível demais ou de menos, é só mudar o número.
