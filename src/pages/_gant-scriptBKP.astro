@@ -121,97 +121,31 @@ $(function () {
     // TAREFAS, GRUPOS E NUMERAÇÃO
     // ---------------------------------------------------------------
 
-    const buscarTarefa = (id) => estado.tasks.find((t) => t.id === Number(id));
+    const buscarTarefa = (id) => estado.tasks.find((t) => t.id === id);
 
-    function normalizarHierarquia() {
-        const ids = new Set(estado.tasks.map((t) => t.id));
-        let ultimoGrupoLegado = null;
-
-        estado.tasks.forEach((tarefa) => {
-            // Compatibilidade com os dados antigos, que não possuíam parentId.
-            if (typeof tarefa.parentId === "undefined") {
-                tarefa.parentId = tarefa.group ? null : ultimoGrupoLegado;
-            }
-
-            if (tarefa.group) {
-                ultimoGrupoLegado = tarefa.id;
-            }
-        });
-
-        // Remove referências para pais que não existem mais.
-        estado.tasks.forEach((tarefa) => {
-            if (tarefa.parentId !== null && !ids.has(tarefa.parentId)) {
-                tarefa.parentId = null;
-            }
-        });
-    }
-
-    function filhosDiretos(tarefa) {
-        if (!tarefa) return [];
-        return estado.tasks.filter((t) => t.parentId === tarefa.id);
-    }
-
-    function descendentesDaTarefa(tarefa) {
-        if (!tarefa) return [];
-
-        const resultado = [];
-        const visitar = (pai) => {
-            filhosDiretos(pai).forEach((filho) => {
-                resultado.push(filho);
-                visitar(filho);
-            });
-        };
-
-        visitar(tarefa);
-        return resultado;
-    }
-
-    function folhasDaTarefa(tarefa) {
-        return descendentesDaTarefa(tarefa).filter((t) => !filhosDiretos(t).length);
-    }
-
-    // Mantém o nome usado pelo restante do Gantt.
-    // Agora retorna todas as tarefas finais abaixo do grupo, inclusive em níveis profundos.
     function filhasDoGrupo(grupo) {
-        return folhasDaTarefa(grupo);
-    }
-
-    function nivelDaTarefa(tarefa) {
-        let nivel = 0;
-        let atual = tarefa;
-        const vistos = new Set();
-
-        while (atual?.parentId !== null && atual?.parentId !== undefined) {
-            if (vistos.has(atual.id)) break;
-            vistos.add(atual.id);
-            atual = buscarTarefa(atual.parentId);
-            if (!atual) break;
-            nivel++;
+        const filhas = [];
+        for (let i = estado.tasks.indexOf(grupo) + 1; i < estado.tasks.length && !estado.tasks[i].group; i++) {
+            filhas.push(estado.tasks[i]);
         }
-
-        return nivel;
-    }
-
-    function temFilhos(tarefa) {
-        return filhosDiretos(tarefa).length > 0;
-    }
-
-    function atualizarEstadoDosGrupos() {
-        estado.tasks.forEach((tarefa) => {
-            // Um grupo existente continua sendo grupo quando está no nível raiz.
-            // Para níveis internos, sem filhos ele volta a ser uma tarefa normal.
-            if (tarefa.parentId !== null && tarefa.parentId !== undefined && !temFilhos(tarefa)) {
-                tarefa.group = false;
-            }
-        });
-
-        estado.tasks.forEach((tarefa) => {
-            if (temFilhos(tarefa)) tarefa.group = true;
-        });
+        return filhas;
     }
 
     function ordenarTarefasPorData() {
-        normalizarHierarquia();
+        const grupos = [];
+        let grupoAtual = null;
+
+        estado.tasks.forEach((t) => {
+            if (t.group) {
+                grupoAtual = { grupo: t, filhas: [] };
+                grupos.push(grupoAtual);
+            } else if (grupoAtual) {
+                grupoAtual.filhas.push(t);
+            } else {
+                grupoAtual = { grupo: null, filhas: [t] };
+                grupos.push(grupoAtual);
+            }
+        });
 
         const compararDatasDesc = (dataA, dataB) => {
             if (!dataA && !dataB) return 0;
@@ -220,97 +154,62 @@ $(function () {
             return dataB.localeCompare(dataA);
         };
 
-        const obterInicioTarefa = (tarefa) => {
-            if (tarefa.planned?.[0]) return tarefa.planned[0];
-
-            const folhas = folhasDaTarefa(tarefa);
-            const datas = folhas
-                .map((f) => f.planned?.[0])
-                .filter(Boolean)
-                .sort();
-
+        const obterInicioGrupo = (g) => {
+            if (g.grupo?.planned?.[0]) return g.grupo.planned[0];
+            const datas = g.filhas.map((f) => f.planned?.[0]).filter(Boolean).sort();
             return datas[0] || "";
         };
 
-        const ordenarFilhos = (pai) => {
-            const filhos = filhosDiretos(pai);
-            filhos.sort((a, b) => compararDatasDesc(obterInicioTarefa(a), obterInicioTarefa(b)));
-            filhos.forEach(ordenarFilhos);
-        };
+        grupos.forEach((g) => {
+            g.filhas.sort((a, b) => compararDatasDesc(a.planned?.[0], b.planned?.[0]));
+        });
 
-        const raizes = estado.tasks.filter((t) => t.parentId === null || t.parentId === undefined);
-        raizes.sort((a, b) => compararDatasDesc(obterInicioTarefa(a), obterInicioTarefa(b)));
-
-        raizes.forEach(ordenarFilhos);
+        grupos.sort((a, b) => {
+            const dtA = obterInicioGrupo(a);
+            const dtB = obterInicioGrupo(b);
+            return compararDatasDesc(dtA, dtB);
+        });
 
         const novasTasks = [];
-        const adicionarRecursivo = (tarefa) => {
-            novasTasks.push(tarefa);
-            filhosDiretos(tarefa).forEach(adicionarRecursivo);
-        };
+        grupos.forEach((g) => {
+            if (g.grupo) novasTasks.push(g.grupo);
+            g.filhas.forEach((f) => novasTasks.push(f));
+        });
 
-        raizes.forEach(adicionarRecursivo);
         estado.tasks = novasTasks;
     }
 
     function recalcularNumeracao() {
-        normalizarHierarquia();
+        let contadorGrupo = 0;
+        let contadorFilha = 0;
 
-        const raizes = estado.tasks.filter((t) => t.parentId === null || t.parentId === undefined);
-
-        raizes.forEach((raiz, indiceRaiz) => {
-            const numeroRaiz = indiceRaiz + 1;
-            raiz.no = `${numeroRaiz}`;
-
-            const numerarFilhos = (pai, prefixo) => {
-                filhosDiretos(pai).forEach((filho, indiceFilho) => {
-                    filho.no = `${prefixo}.${indiceFilho + 1}`;
-                    numerarFilhos(filho, filho.no);
-                });
-            };
-
-            numerarFilhos(raiz, raiz.no);
+        estado.tasks.forEach((tarefa) => {
+            if (tarefa.group) {
+                contadorGrupo++;
+                contadorFilha = 0;
+                tarefa.no = `${contadorGrupo}.0`;
+            } else {
+                if (contadorGrupo === 0) contadorGrupo = 1;
+                contadorFilha++;
+                tarefa.no = `${contadorGrupo}.${contadorFilha}`;
+            }
         });
-
-        atualizarEstadoDosGrupos();
     }
 
     function reordenarNumeracao() {
-        recalcularNumeracao();
-    }
+        let grupoAtual = 0;
+        let subItemAtual = 0;
 
-    function obterUltimoIndiceDaSubarvore(tarefa) {
-        const index = estado.tasks.indexOf(tarefa);
-        if (index < 0) return -1;
-
-        let ultimo = index;
-        for (let i = index + 1; i < estado.tasks.length; i++) {
-            const atual = estado.tasks[i];
-            if (atual.parentId === tarefa.id || estaDentroDaSubarvore(atual, tarefa)) {
-                ultimo = i;
-            } else if (nivelDaTarefa(atual) <= nivelDaTarefa(tarefa)) {
-                break;
+        estado.tasks.forEach((t) => {
+            if (t.group) {
+                grupoAtual++;
+                subItemAtual = 0;
+                t.no = `${grupoAtual}`;
+            } else {
+                subItemAtual++;
+                t.no = `${grupoAtual}.${subItemAtual}`;
             }
-        }
-
-        return ultimo;
-    }
-
-    function estaDentroDaSubarvore(tarefa, ancestral) {
-        if (!tarefa || !ancestral) return false;
-
-        let atual = tarefa;
-        const vistos = new Set();
-
-        while (atual?.parentId !== null && atual?.parentId !== undefined) {
-            if (vistos.has(atual.id)) return false;
-            vistos.add(atual.id);
-
-            if (atual.parentId === ancestral.id) return true;
-            atual = buscarTarefa(atual.parentId);
-        }
-
-        return false;
+        });
     }
 
     function resumoGrupo(grupo) {
@@ -406,32 +305,29 @@ $(function () {
     // SELEÇÃO EM LOTE (CHECKBOXES)
     // ---------------------------------------------------------------
 
+    // Remove ids que não existem mais e deixa cada atividade marcada
+    // somente quando todas as tarefas abaixo dela estão marcadas.
     function sincronizarSelecao() {
         const idsExistentes = new Set(estado.tasks.map((t) => t.id));
         selecionados.forEach((id) => !idsExistentes.has(id) && selecionados.delete(id));
 
-        estado.tasks
-            .filter((t) => t.group)
-            .slice()
-            .reverse()
-            .forEach((grupo) => {
-                const descendentes = descendentesDaTarefa(grupo);
-                if (!descendentes.length) return;
-
-                const todosMarcados = descendentes.every((f) => selecionados.has(f.id));
-                todosMarcados ? selecionados.add(grupo.id) : selecionados.delete(grupo.id);
-            });
+        estado.tasks.filter((t) => t.group).forEach((grupo) => {
+            const filhas = filhasDoGrupo(grupo);
+            if (!filhas.length) return;
+            filhas.every((f) => selecionados.has(f.id)) ? selecionados.add(grupo.id) : selecionados.delete(grupo.id);
+        });
     }
 
+    // Reflete a seleção na tela (checked, indeterminate e botão Excluir do topo)
     function atualizarSelecaoNaTela() {
         $("#leftBody .row-check").each(function () {
             const id = Number($(this).data("id"));
             const tarefa = buscarTarefa(id);
-            const descendentes = tarefa?.group ? descendentesDaTarefa(tarefa) : [];
-            const qtdMarcadas = descendentes.filter((f) => selecionados.has(f.id)).length;
+            const filhas = tarefa?.group ? filhasDoGrupo(tarefa) : [];
+            const qtdMarcadas = filhas.filter((f) => selecionados.has(f.id)).length;
 
             this.checked = selecionados.has(id);
-            this.indeterminate = qtdMarcadas > 0 && qtdMarcadas < descendentes.length;
+            this.indeterminate = qtdMarcadas > 0 && qtdMarcadas < filhas.length;
         });
 
         const total = selecionados.size;
@@ -444,23 +340,12 @@ $(function () {
     // LINHA ATIVA E MUDANÇA DE NÍVEL (SUBIR / DESCER)
     // ---------------------------------------------------------------
 
+    // Habilita as setas conforme a linha ativa:
+    // subir = tarefa vira atividade; descer = atividade vira tarefa da atividade anterior
     function atualizarBotoesNivel() {
         const tarefa = buscarTarefa(linhaAtivaId);
-
-        if (!tarefa) {
-            $('[data-gantt-btn-nivel="superior"]').prop("disabled", true);
-            $('[data-gantt-btn-nivel="Inferior"]').prop("disabled", true);
-            return;
-        }
-
-        const irmaos = obterIrmaos(tarefa);
-        const indiceIrmao = irmaos.findIndex((t) => t.id === tarefa.id);
-
-        // Descer: precisa existir um irmão imediatamente anterior.
-        const podeDescer = indiceIrmao > 0;
-
-        // Subir: precisa existir um pai.
-        const podeSubir = tarefa.parentId !== null && tarefa.parentId !== undefined;
+        const podeSubir = !!tarefa && !tarefa.group;
+        const podeDescer = !!tarefa && tarefa.group && estado.tasks.slice(0, estado.tasks.indexOf(tarefa)).some((t) => t.group);
 
         $('[data-gantt-btn-nivel="superior"]').prop("disabled", !podeSubir);
         $('[data-gantt-btn-nivel="Inferior"]').prop("disabled", !podeDescer);
@@ -476,127 +361,31 @@ $(function () {
         atualizarBotoesNivel();
     }
 
-    function obterIrmaos(tarefa) {
-        if (!tarefa) return [];
-        const parentId = tarefa.parentId ?? null;
-        return estado.tasks.filter((t) => (t.parentId ?? null) === parentId);
-    }
-
-    function obterSubarvore(tarefa) {
-        if (!tarefa) return [];
-        return [tarefa, ...descendentesDaTarefa(tarefa)];
-    }
-
-    function obterBlocoDaSubarvore(tarefa) {
-        const ids = new Set(obterSubarvore(tarefa).map((t) => t.id));
-        return estado.tasks.filter((t) => ids.has(t.id));
-    }
-
-    function removerBlocoDaSubarvore(tarefa) {
-        const bloco = obterBlocoDaSubarvore(tarefa);
-        const ids = new Set(bloco.map((t) => t.id));
-        estado.tasks = estado.tasks.filter((t) => !ids.has(t.id));
-        return bloco;
-    }
-
-    function inserirBlocoComoPrimeiroFilho(bloco, pai) {
-        if (!bloco?.length || !pai) return false;
-        const indicePai = estado.tasks.indexOf(pai);
-        if (indicePai < 0) return false;
-        estado.tasks.splice(indicePai + 1, 0, ...bloco);
-        return true;
-    }
-
-    function moverNivelParaBaixo(tarefa) {
-        const irmaos = obterIrmaos(tarefa);
-        const indiceIrmao = irmaos.findIndex((t) => t.id === tarefa.id);
-
-        // A primeira tarefa do mesmo nível não pode descer.
-        if (indiceIrmao <= 0) return false;
-
-        const novoPai = irmaos[indiceIrmao - 1];
-        if (!novoPai) return false;
-
-        // Move a tarefa inteira, incluindo todos os seus descendentes.
-        const bloco = removerBlocoDaSubarvore(tarefa);
-
-        // A tarefa passa a ser filha do irmão imediatamente anterior.
-        tarefa.parentId = novoPai.id;
-        novoPai.group = true;
-
-        // Entra como PRIMEIRO filho do novo pai.
-        if (!inserirBlocoComoPrimeiroFilho(bloco, novoPai)) return false;
-
-        atualizarEstadoDosGrupos();
-        recalcularNumeracao();
-        return true;
-    }
-
-    function moverNivelParaCima(tarefa) {
-        if (tarefa.parentId === null || tarefa.parentId === undefined) return false;
-
-        const antigoPai = buscarTarefa(tarefa.parentId);
-        if (!antigoPai) {
-            tarefa.parentId = null;
-            atualizarEstadoDosGrupos();
-            recalcularNumeracao();
-            return true;
-        }
-
-        const novoPaiId = antigoPai.parentId ?? null;
-        const bloco = removerBlocoDaSubarvore(tarefa);
-
-        // A tarefa promovida passa a ser irmã do antigo pai.
-        tarefa.parentId = novoPaiId;
-
-        // Depois de toda a subárvore do antigo pai.
-        const indicePai = estado.tasks.indexOf(antigoPai);
-        if (indicePai < 0) return false;
-
-        let indiceInsercao = indicePai + 1;
-        while (
-            indiceInsercao < estado.tasks.length &&
-            estaDentroDaSubarvore(estado.tasks[indiceInsercao], antigoPai)
-        ) {
-            indiceInsercao++;
-        }
-
-        estado.tasks.splice(indiceInsercao, 0, ...bloco);
-
-        atualizarEstadoDosGrupos();
-        recalcularNumeracao();
-        return true;
-    }
-
     function moverNivel(direcao) {
         const tarefa = buscarTarefa(linhaAtivaId);
         if (!tarefa) return;
 
-        normalizarHierarquia();
-
-        let moveu = false;
-
         if (direcao === "descer") {
-            moveu = moverNivelParaBaixo(tarefa);
-        } else if (direcao === "subir") {
-            moveu = moverNivelParaCima(tarefa);
+            if (!tarefa.group || !estado.tasks.slice(0, estado.tasks.indexOf(tarefa)).some((t) => t.group)) return;
+            tarefa.group = false;
+            tarefa.pred = tarefa.pred || [];
+        } else {
+            if (tarefa.group) return;
+            Object.assign(tarefa, {
+                group: true,
+                owner: "",
+                planned: ["", ""],
+                baseline: ["", ""],
+                real: ["", ""],
+                pred: [],
+                progress: 0,
+                reagendada: false
+            });
+            estado.tasks.forEach((t) => (t.pred = (t.pred || []).filter((pid) => pid !== tarefa.id)));
         }
 
-        if (!moveu) {
-            atualizarBotoesNivel();
-            return;
-        }
-
-        // A operação manual de nível deve preservar exatamente a posição escolhida.
-        renderizar({ preservarOrdem: true });
-
-        linhaAtivaId = tarefa.id;
-        marcarLinhaAtiva();
-
-        const $linha = $(`#leftBody tr[data-id="${tarefa.id}"]`);
-        if ($linha.length) {
-            $linha[0].scrollIntoView({ behavior: "smooth", block: "nearest" });
-        }
+        renderizar();
+        $("#leftBody tr.row-active")[0]?.scrollIntoView({ block: "nearest" });
     }
 
     // ---------------------------------------------------------------
@@ -1164,10 +953,17 @@ $(function () {
 
     function renderizarEsquerda() {
         const $body = $("#leftBody").empty();
+        let grupoAtualId = null;
 
-        estado.tasks.forEach((tarefa) => {
+        estado.tasks.forEach((tarefa, index) => {
+            if (tarefa.group) {
+                if (grupoAtualId !== null) {
+                    $body.append(renderLinhaQuickAdd(grupoAtualId));
+                }
+                grupoAtualId = tarefa.id;
+            }
+
             const isGroup = tarefa.group;
-            const nivel = nivelDaTarefa(tarefa);
             const classeLinha = isGroup ? "group-row" : "child";
             const emAtraso = verificarAtraso(tarefa);
             const criticoAtrasado = isGroup
@@ -1178,7 +974,6 @@ $(function () {
             const emRisco = verificarRisco(tarefa);
             const resumo = isGroup ? resumoGrupo(tarefa) : null;
             const somenteLeitura = (texto) => `<span class="small text-secondary">${texto}</span>`;
-            const recuo = nivel * 22;
 
             $body.append(`
                 <tr class="${classeLinha}" data-id="${tarefa.id}">
@@ -1187,8 +982,7 @@ $(function () {
                     </td>
                     <td class="text-center text-secondary">${escaparHtml(tarefa.no)}</td>
                     <td class="activity-cell">
-                        <div class="d-flex align-items-center gap-1" style="padding-left:${recuo}px;">
-                            ${nivel > 0 ? '<i class="bi bi-arrow-return-right text-secondary small"></i>' : ""}
+                        <div class="d-flex align-items-center gap-1">
                             <input type="text" name="atividade" class="activity-input" data-field="name" data-id="${tarefa.id}" value="${escaparHtml(tarefa.name)}" ${isGroup ? 'style="font-weight:600"' : ""}>
                             ${criticoAtrasado ? '<i class="bi bi-exclamation-triangle-fill status-critical" data-bs-toggle="tooltip" data-bs-title="Caminho Crítico"></i>' : ""}
                             ${atrasadoNormal ? '<i class="bi bi-fire status-overdue" data-bs-toggle="tooltip" data-bs-title="Real Atrasado"></i>' : ""}
@@ -1215,28 +1009,10 @@ $(function () {
                 </tr>
             `);
 
-            // O campo de inclusão rápida continua apenas nas atividades raiz.
+            if (index === estado.tasks.length - 1 && grupoAtualId !== null) {
+                $body.append(renderLinhaQuickAdd(grupoAtualId));
+            }
         });
-
-        // Reposiciona os quick-add das atividades raiz para depois de suas subárvores.
-        $body.find("tr.quick-add-row").remove();
-        estado.tasks
-            .filter((t) => t.group && (t.parentId === null || t.parentId === undefined))
-            .slice()
-            .reverse()
-            .forEach((grupo) => {
-                const $linha = $body.find(`tr[data-id="${grupo.id}"]`);
-                if (!$linha.length) return;
-
-                let $ultimaLinha = $linha;
-                let $proxima = $ultimaLinha.next();
-                while ($proxima.length && $proxima.data("id") !== undefined && estaDentroDaSubarvore(buscarTarefa(Number($proxima.data("id"))), grupo)) {
-                    $ultimaLinha = $proxima;
-                    $proxima = $proxima.next();
-                }
-
-                $ultimaLinha.after(renderLinhaQuickAdd(grupo.id));
-            });
 
         atualizarVisibilidadeColunas();
         sincronizarSelecao();
@@ -1302,6 +1078,13 @@ $(function () {
         let grupoAtualId = null;
 
         estado.tasks.forEach((tarefa, index) => {
+            if (tarefa.group) {
+                if (grupoAtualId !== null) {
+                    $body.append(renderLinhaQuickAddDireita(totalWidth, posHoje));
+                }
+                grupoAtualId = tarefa.id;
+            }
+
             const $row = $(`<div class="timeline-row ${tarefa.group ? "group" : ""}" data-id="${tarefa.id}" style="width:${totalWidth}px;"></div>`);
             const resumo = tarefa.group ? resumoGrupo(tarefa) : null;
 
@@ -1397,24 +1180,11 @@ $(function () {
 
             $body.append($row);
             linhas.set(tarefa.id, $row[0]);
+
+            if (index === estado.tasks.length - 1 && grupoAtualId !== null) {
+                $body.append(renderLinhaQuickAddDireita(totalWidth, posHoje));
+            }
         });
-
-        // Mantém uma linha quick-add visual para cada atividade raiz.
-        estado.tasks
-            .filter((t) => t.group && (t.parentId === null || t.parentId === undefined))
-            .forEach((grupo) => {
-                const $linhaGrupo = $body.find(`.timeline-row[data-id="${grupo.id}"]`);
-                if (!$linhaGrupo.length) return;
-
-                let $ultimaLinha = $linhaGrupo;
-                let $proxima = $ultimaLinha.next();
-                while ($proxima.length && $proxima.data("id") !== undefined && estaDentroDaSubarvore(buscarTarefa(Number($proxima.data("id"))), grupo)) {
-                    $ultimaLinha = $proxima;
-                    $proxima = $proxima.next();
-                }
-
-                $ultimaLinha.after(renderLinhaQuickAddDireita(totalWidth, posHoje));
-            });
 
         desenharSetas($body, totalWidth, linhas);
     }
@@ -1453,7 +1223,7 @@ $(function () {
         });
     }
 
-    function renderizar(opcoes = {}) {
+    function renderizar() {
         periodosCache = null;
         predAberto = null;
 
@@ -1467,12 +1237,7 @@ $(function () {
         $("#leftBody").empty();
         $("#rightBody").empty();
 
-        normalizarHierarquia();
-
-        if (!opcoes.preservarOrdem) {
-            ordenarTarefasPorData();
-        }
-
+        ordenarTarefasPorData();
         recalcularNumeracao();
         calcularCaminhoCritico();
         renderizarEsquerda();
@@ -1496,18 +1261,24 @@ $(function () {
     function criarNovaLinha(inputElement) {
         const $input = $(inputElement);
         const nome = $input.val().trim();
+
+        // Se estiver vazio, não faz nada
         if (!nome) return;
 
-        $input.val("");
+        // Limpa o valor para evitar dupla inserção se o evento disparar duas vezes (Enter + Perda de foco)
+        $input.val('');
 
         const grupoId = Number($input.data("group-id"));
-        const grupo = buscarTarefa(grupoId);
-        if (!grupo) return;
+        const indexGrupo = estado.tasks.findIndex((t) => t.id === grupoId);
+        if (indexGrupo === -1) return;
 
-        grupo.group = true;
+        let indexInsercao = indexGrupo + 1;
+        while (indexInsercao < estado.tasks.length && !estado.tasks[indexInsercao].group) {
+            indexInsercao++;
+        }
 
         proximoId++;
-        const novaTarefa = {
+        estado.tasks.splice(indexInsercao, 0, {
             id: proximoId,
             no: "",
             name: nome,
@@ -1517,24 +1288,10 @@ $(function () {
             real: ["", ""],
             pred: [],
             progress: 0,
-            group: false,
-            parentId: grupo.id
-        };
-
-        const indexGrupo = estado.tasks.indexOf(grupo);
-        let indexInsercao = indexGrupo + 1;
-
-        while (
-            indexInsercao < estado.tasks.length &&
-            estaDentroDaSubarvore(estado.tasks[indexInsercao], grupo)
-        ) {
-            indexInsercao++;
-        }
-
-        estado.tasks.splice(indexInsercao, 0, novaTarefa);
+            group: false
+        });
 
         focoGrupoId = grupoId;
-        linhaAtivaId = novaTarefa.id;
         renderizar();
     }
     // ---------------------------------------------------------------
@@ -1695,7 +1452,6 @@ $(function () {
             pred: [],
             progress: 0,
             group: true,
-            parentId: null,
         });
 
         reordenarNumeracao();
@@ -1714,7 +1470,7 @@ $(function () {
         const tarefa = buscarTarefa(id);
         if (!tarefa) return;
 
-        const ids = [id, ...(tarefa.group ? descendentesDaTarefa(tarefa).map((f) => f.id) : [])];
+        const ids = [id, ...(tarefa.group ? filhasDoGrupo(tarefa).map((f) => f.id) : [])];
         ids.forEach((i) => (this.checked ? selecionados.add(i) : selecionados.delete(i)));
 
         sincronizarSelecao();
@@ -1729,7 +1485,7 @@ $(function () {
         const ids = new Set();
         marcadas.forEach((t) => {
             ids.add(t.id);
-            if (t.group) descendentesDaTarefa(t).forEach((f) => ids.add(f.id));
+            if (t.group) filhasDoGrupo(t).forEach((f) => ids.add(f.id));
         });
         idsParaExcluir = Array.from(ids);
 
@@ -1816,7 +1572,7 @@ $(function () {
         marcarLinhaAtiva();
     });
 
-    // Setas: descer = tarefa vira filha do irmão anterior; subir = tarefa volta ao nível do pai
+    // Setas: subir = tarefa vira atividade; descer = atividade vira tarefa da atividade anterior
     $('[data-gantt-btn-nivel="superior"]').on("click", () => moverNivel("subir"));
     $('[data-gantt-btn-nivel="Inferior"]').on("click", () => moverNivel("descer"));
 
