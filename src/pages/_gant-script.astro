@@ -39,6 +39,7 @@ $(function () {
     let acaoPendenteAjuste = null;
     let valorAnteriorInput = "";
     let focoGrupoId = null;
+    let linhaAtivaId = null;
 
     // ---------------------------------------------------------------
     // UTILITÁRIOS GERAIS
@@ -333,6 +334,58 @@ $(function () {
         $("#btnExcluirSelecionados")
             .prop("disabled", !total)
             .html(`<i class="bi bi-trash"></i> Excluir${total ? ` (${total})` : ""}`);
+    }
+
+    // ---------------------------------------------------------------
+    // LINHA ATIVA E MUDANÇA DE NÍVEL (SUBIR / DESCER)
+    // ---------------------------------------------------------------
+
+    // Habilita as setas conforme a linha ativa:
+    // subir = tarefa vira atividade; descer = atividade vira tarefa da atividade anterior
+    function atualizarBotoesNivel() {
+        const tarefa = buscarTarefa(linhaAtivaId);
+        const podeSubir = !!tarefa && !tarefa.group;
+        const podeDescer = !!tarefa && tarefa.group && estado.tasks.slice(0, estado.tasks.indexOf(tarefa)).some((t) => t.group);
+
+        $('[data-gantt-btn-nivel="superior"]').prop("disabled", !podeSubir);
+        $('[data-gantt-btn-nivel="Inferior"]').prop("disabled", !podeDescer);
+    }
+
+    function marcarLinhaAtiva() {
+        if (linhaAtivaId && !buscarTarefa(linhaAtivaId)) linhaAtivaId = null;
+
+        $("#leftBody tr[data-id], #timelineBody .timeline-row[data-id]").each(function () {
+            $(this).toggleClass("row-active", Number($(this).data("id")) === linhaAtivaId);
+        });
+
+        atualizarBotoesNivel();
+    }
+
+    function moverNivel(direcao) {
+        const tarefa = buscarTarefa(linhaAtivaId);
+        if (!tarefa) return;
+
+        if (direcao === "descer") {
+            if (!tarefa.group || !estado.tasks.slice(0, estado.tasks.indexOf(tarefa)).some((t) => t.group)) return;
+            tarefa.group = false;
+            tarefa.pred = tarefa.pred || [];
+        } else {
+            if (tarefa.group) return;
+            Object.assign(tarefa, {
+                group: true,
+                owner: "",
+                planned: ["", ""],
+                baseline: ["", ""],
+                real: ["", ""],
+                pred: [],
+                progress: 0,
+                reagendada: false
+            });
+            estado.tasks.forEach((t) => (t.pred = (t.pred || []).filter((pid) => pid !== tarefa.id)));
+        }
+
+        renderizar();
+        $("#leftBody tr.row-active")[0]?.scrollIntoView({ block: "nearest" });
     }
 
     // ---------------------------------------------------------------
@@ -807,7 +860,7 @@ $(function () {
                         type="text"
                         class="quick-add-input"
                         data-group-id="${grupoId}"
-                        placeholder="Incluir nova tarefa"
+                        placeholder="Nova tarefa... (Enter para salvar)"
                         style="width: 100%; border: none; border-bottom: 1px solid #ced4da; outline: none; background: transparent; padding: 2px 4px; font-size: 0.875rem;"
                     >
                 </td>
@@ -852,6 +905,11 @@ $(function () {
             }
         });
         return maxData;
+    }
+
+    function obterPrazoPlanejado(tasks) {
+        const fins = tasks.map((t) => t.planned?.[1]).filter(Boolean).sort();
+        return fins.length ? analisarData(fins.pop()) : null;
     }
 
     function exibirModalConfirmacaoAjuste(diasDiff, dependentesQtd) {
@@ -1027,7 +1085,7 @@ $(function () {
                 grupoAtualId = tarefa.id;
             }
 
-            const $row = $(`<div class="timeline-row ${tarefa.group ? "group" : ""}" style="width:${totalWidth}px;"></div>`);
+            const $row = $(`<div class="timeline-row ${tarefa.group ? "group" : ""}" data-id="${tarefa.id}" style="width:${totalWidth}px;"></div>`);
             const resumo = tarefa.group ? resumoGrupo(tarefa) : null;
 
             if (posHoje > 0 && posHoje < totalWidth) {
@@ -1187,6 +1245,7 @@ $(function () {
 
         inicializarTooltips();
         iniciarPredecessoras();
+        marcarLinhaAtiva();
 
         if (focoGrupoId) {
             const $input =$(`.quick-add-input[data-group-id="${focoGrupoId}"]`);
@@ -1197,42 +1256,60 @@ $(function () {
         }
     }
 
+
+    // Separe a lógica principal para não duplicar código
+    function criarNovaLinha(inputElement) {
+        const $input = $(inputElement);
+        const nome = $input.val().trim();
+
+        // Se estiver vazio, não faz nada
+        if (!nome) return;
+
+        // Limpa o valor para evitar dupla inserção se o evento disparar duas vezes (Enter + Perda de foco)
+        $input.val('');
+
+        const grupoId = Number($input.data("group-id"));
+        const indexGrupo = estado.tasks.findIndex((t) => t.id === grupoId);
+        if (indexGrupo === -1) return;
+
+        let indexInsercao = indexGrupo + 1;
+        while (indexInsercao < estado.tasks.length && !estado.tasks[indexInsercao].group) {
+            indexInsercao++;
+        }
+
+        proximoId++;
+        estado.tasks.splice(indexInsercao, 0, {
+            id: proximoId,
+            no: "",
+            name: nome,
+            owner: "",
+            planned: ["", ""],
+            baseline: ["", ""],
+            real: ["", ""],
+            pred: [],
+            progress: 0,
+            group: false
+        });
+
+        focoGrupoId = grupoId;
+        renderizar();
+    }
     // ---------------------------------------------------------------
     // EVENTOS
     // ---------------------------------------------------------------
-
-    $(document).on("keydown", ".quick-add-input", function (e) {
-        if (e.key === "Enter" || e.keyCode === 13) {
-            e.preventDefault();
-            const nome = $(this).val().trim();
-            if (!nome) return;
-
-            const grupoId = Number($(this).data("group-id"));
-            const indexGrupo = estado.tasks.findIndex((t) => t.id === grupoId);
-            if (indexGrupo === -1) return;
-
-            let indexInsercao = indexGrupo + 1;
-            while (indexInsercao < estado.tasks.length && !estado.tasks[indexInsercao].group) {
-                indexInsercao++;
-            }
-
-            proximoId++;
-            estado.tasks.splice(indexInsercao, 0, {
-                id: proximoId,
-                no: "",
-                name: nome,
-                owner: "",
-                planned: ["", ""],
-                baseline: ["", ""],
-                real: ["", ""],
-                pred: [],
-                progress: 0,
-                group: false
-            });
-
-            focoGrupoId = grupoId;
-            renderizar();
+    // Vincula tanto o 'keydown' (teclado) quanto o 'focusout' (clique fora/perda de foco)
+    $(document).on("keydown focusout", ".quick-add-input", function (e) {
+        // Se for um evento de teclado e não for a tecla Enter, ignoramos
+        if (e.type === "keydown" && e.key !== "Enter" && e.keyCode !== 13) {
+            return;
         }
+
+        // Previne o comportamento padrão apenas se for o Enter
+        if (e.type === "keydown") {
+            e.preventDefault();
+        }
+
+        criarNovaLinha(this);
     });
 
     $(document).on("input", ".activity-input, .progress-input", function () {
@@ -1286,10 +1363,11 @@ $(function () {
         const afetadas = reagendarSimulacao(cloneTasks, [id]);
         const maxDataDepois = obterFimMaximoProjeto(cloneTasks);
 
-        let diferencaDiasProjeto = 0;
-        if (maxDataAntes && maxDataDepois) {
-            diferencaDiasProjeto = diferencaDias(maxDataAntes, maxDataDepois);
-        }
+        const variacaoFimProjeto = maxDataAntes && maxDataDepois ? diferencaDias(maxDataAntes, maxDataDepois) : 0;
+
+        // A mensagem compara o novo fim com o prazo planejado, não com o estado anterior
+        const prazoPlanejado = obterPrazoPlanejado(estado.tasks);
+        const diferencaDiasProjeto = prazoPlanejado && maxDataDepois ? diferencaDias(prazoPlanejado, maxDataDepois) : 0;
 
         const dependentesRealmenteAfetadas = afetadas.filter((afetId) => {
             if (afetId === id) return false;
@@ -1301,7 +1379,7 @@ $(function () {
 
         const qtdDependentesAfetadas = dependentesRealmenteAfetadas.length;
 
-        if (diferencaDiasProjeto !== 0 || qtdDependentesAfetadas > 0) {
+        if (variacaoFimProjeto !== 0 || qtdDependentesAfetadas > 0) {
             acaoPendenteAjuste = {
                 inputEl,
                 executar: () => {
@@ -1477,24 +1555,26 @@ $(function () {
 
     $(".column-toggle").on("change", atualizarVisibilidadeColunas);
 
-    $('[data-gantt-btn="prev"]').on("click", function () {
-        const $container =$("#rightScroll");
-        $container.animate({ scrollLeft:$container.scrollLeft() - 300 }, 200);
+    // Seleção da linha: clique fora dos campos ou foco no nome da atividade/tarefa
+    $(document).on("click", "#leftBody tr[data-id]", function (e) {
+        if ($(e.target).closest("input, select, button, a, label, .ms-parent, .ms-drop").length) return;
+
+        const id = Number($(this).data("id"));
+        linhaAtivaId = linhaAtivaId === id ? null : id;
+        marcarLinhaAtiva();
     });
 
-    $('[data-gantt-btn="next"]').on("click", function () {
-        const $container =$("#rightScroll");
-        $container.animate({ scrollLeft:$container.scrollLeft() + 300 }, 200);
+    $(document).on("focusin", "#leftBody .activity-input", function () {
+        const id = Number($(this).data("id"));
+        if (linhaAtivaId === id) return;
+
+        linhaAtivaId = id;
+        marcarLinhaAtiva();
     });
 
-    $("#rightScroll").on("scroll", function () {
-        const $container =$(this);
-        const scrollLeft = $container.scrollLeft();
-        const maxScroll = $container[0].scrollWidth -$container.outerWidth();
-
-        $('[data-gantt-btn="prev"]').prop("disabled", scrollLeft <= 0);
-        $('[data-gantt-btn="next"]').prop("disabled", scrollLeft >= maxScroll - 1);
-    });
+    // Setas: subir = tarefa vira atividade; descer = atividade vira tarefa da atividade anterior
+    $('[data-gantt-btn-nivel="superior"]').on("click", () => moverNivel("subir"));
+    $('[data-gantt-btn-nivel="Inferior"]').on("click", () => moverNivel("descer"));
 
     $('[data-gantt-btn="saveBeseline"]').on("click", function () {
         estado.tasks.forEach((t) => {

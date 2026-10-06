@@ -229,6 +229,17 @@ gantt-table
     font-weight: 600;
 }
 
+.gantt-table tbody tr.row-active td {
+    background: #fbeef0;
+}
+.gantt-table tbody tr.row-active td:first-child {
+    box-shadow: inset 3px 0 0 var(--g-primary);
+}
+.timeline-row.row-active,
+.timeline-row.group.row-active {
+    background: #fbeef0;
+}
+
 .activity-cell {
     min-width: 0;
 }
