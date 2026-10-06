@@ -253,7 +253,7 @@ gantt-table
     outline: 0;
     background: transparent;
     padding: 0;
-    font-size: 12px;
+    font-size: 0.85rem;
     color: var(--g-text);
 }
 .activity-input:focus {
