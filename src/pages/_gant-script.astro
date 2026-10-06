@@ -333,7 +333,7 @@ $(function () {
         const total = selecionados.size;
         $("#btnExcluirSelecionados")
             .prop("disabled", !total)
-            .html(`<i class="bi bi-trash"></i> Excluir${total ? ` (${total})` : ""}`);
+            .html(`<i class="bi bi-trash"></i> ${total ? ` (${total})` : ""}`);
     }
 
     // ---------------------------------------------------------------
