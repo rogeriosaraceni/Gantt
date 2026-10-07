@@ -441,29 +441,47 @@ $(function () {
     }
 
     // ---------------------------------------------------------------
-    // LINHA ATIVA E MUDANÇA DE NÍVEL (SUBIR / DESCER)
+    // LINHA ATIVA E HIERARQUIA (INDENTAR / DESINDENTAR)
     // ---------------------------------------------------------------
 
     function atualizarBotoesNivel() {
         const tarefa = buscarTarefa(linhaAtivaId);
+        const $desindentar = $('[data-gantt-btn-nivel="superior"]');
+        const $indentar = $('[data-gantt-btn-nivel="Inferior"]');
 
         if (!tarefa) {
-            $('[data-gantt-btn-nivel="superior"]').prop("disabled", true);
-            $('[data-gantt-btn-nivel="Inferior"]').prop("disabled", true);
+            $desindentar
+                .prop("disabled", true)
+                .attr("title", "Desindentar / mover para o nível superior")
+                .attr("aria-label", "Desindentar / mover para o nível superior");
+
+            $indentar
+                .prop("disabled", true)
+                .attr("title", "Indentar / mover para dentro da atividade anterior")
+                .attr("aria-label", "Indentar / mover para dentro da atividade anterior");
+
             return;
         }
 
         const irmaos = obterIrmaos(tarefa);
         const indiceIrmao = irmaos.findIndex((t) => t.id === tarefa.id);
 
-        // Descer: precisa existir um irmão imediatamente anterior.
-        const podeDescer = indiceIrmao > 0;
+        // INDENTAR: a tarefa precisa ter um irmão imediatamente anterior.
+        // Esse irmão se torna o novo pai da tarefa selecionada.
+        const podeIndentar = indiceIrmao > 0;
 
-        // Subir: precisa existir um pai.
-        const podeSubir = tarefa.parentId !== null && tarefa.parentId !== undefined;
+        // DESINDENTAR: a tarefa precisa estar dentro de outra tarefa/fase.
+        const podeDesindentar = tarefa.parentId !== null && tarefa.parentId !== undefined;
 
-        $('[data-gantt-btn-nivel="superior"]').prop("disabled", !podeSubir);
-        $('[data-gantt-btn-nivel="Inferior"]').prop("disabled", !podeDescer);
+        $desindentar
+            .prop("disabled", !podeDesindentar)
+            .attr("title", "Desindentar / mover para o nível superior")
+            .attr("aria-label", "Desindentar / mover para o nível superior");
+
+        $indentar
+            .prop("disabled", !podeIndentar)
+            .attr("title", "Indentar / mover para dentro da atividade anterior")
+            .attr("aria-label", "Indentar / mover para dentro da atividade anterior");
     }
 
     function marcarLinhaAtiva() {
@@ -508,23 +526,43 @@ $(function () {
     }
 
     function moverNivelParaBaixo(tarefa) {
+        // INDENTAR
+        //
+        // Exemplo:
+        //
+        // 1.1
+        //     1.1.1
+        // 1.2
+        //
+        // Ao indentar 1.2:
+        //
+        // 1.1
+        //     1.1.1
+        //     1.1.2  <- a própria 1.2 foi movida para cá
+        //
+        // A tarefa NÃO vira pai e nenhuma nova tarefa é criada.
+
         const irmaos = obterIrmaos(tarefa);
         const indiceIrmao = irmaos.findIndex((t) => t.id === tarefa.id);
 
-        // A primeira tarefa do mesmo nível não pode descer.
         if (indiceIrmao <= 0) return false;
 
         const novoPai = irmaos[indiceIrmao - 1];
         if (!novoPai) return false;
 
-        // Move a tarefa inteira, incluindo todos os seus descendentes.
+        // Move a tarefa inteira, preservando todos os seus filhos.
         const bloco = removerBlocoDaSubarvore(tarefa);
+        if (!bloco.length) return false;
 
-        // A tarefa passa a ser filha do irmão imediatamente anterior.
+        // A tarefa selecionada entra dentro do irmão imediatamente anterior.
         tarefa.parentId = novoPai.id;
+
+        // Como possui a mesma hierarquia do novo pai, o novo pai passa a ser grupo.
         novoPai.group = true;
 
-        // Entra como PRIMEIRO filho do novo pai.
+        // Coloca a tarefa como PRIMEIRO filho do novo pai.
+        // Isso garante, por exemplo:
+        // 1.1.2 + 1.2 -> 1.1.1 + 1.1.2
         if (!inserirBlocoComoPrimeiroFilho(bloco, novoPai)) return false;
 
         atualizarEstadoDosGrupos();
@@ -533,9 +571,26 @@ $(function () {
     }
 
     function moverNivelParaCima(tarefa) {
+        // DESINDENTAR
+        //
+        // Exemplo:
+        //
+        // 1.1
+        //     1.1.1
+        //     1.1.2
+        //
+        // Ao desindentar 1.1.2:
+        //
+        // 1.1
+        //     1.1.1
+        // 1.2
+        //
+        // A tarefa passa a ser irmã do antigo pai.
+
         if (tarefa.parentId === null || tarefa.parentId === undefined) return false;
 
         const antigoPai = buscarTarefa(tarefa.parentId);
+
         if (!antigoPai) {
             tarefa.parentId = null;
             atualizarEstadoDosGrupos();
@@ -544,16 +599,21 @@ $(function () {
         }
 
         const novoPaiId = antigoPai.parentId ?? null;
+
+        // Move a tarefa inteira, preservando todos os seus filhos.
         const bloco = removerBlocoDaSubarvore(tarefa);
+        if (!bloco.length) return false;
 
         // A tarefa promovida passa a ser irmã do antigo pai.
         tarefa.parentId = novoPaiId;
 
-        // Depois de toda a subárvore do antigo pai.
         const indicePai = estado.tasks.indexOf(antigoPai);
         if (indicePai < 0) return false;
 
+        // Insere depois de TODA a subárvore do antigo pai.
+        // Assim a ordem visual da árvore continua consistente.
         let indiceInsercao = indicePai + 1;
+
         while (
             indiceInsercao < estado.tasks.length &&
             estaDentroDaSubarvore(estado.tasks[indiceInsercao], antigoPai)
@@ -576,9 +636,13 @@ $(function () {
 
         let moveu = false;
 
+        // "descer" = INDENTAR: entrar dentro do irmão anterior.
         if (direcao === "descer") {
             moveu = moverNivelParaBaixo(tarefa);
-        } else if (direcao === "subir") {
+        }
+
+        // "subir" = DESINDENTAR: voltar ao nível do antigo pai.
+        if (direcao === "subir") {
             moveu = moverNivelParaCima(tarefa);
         }
 
@@ -587,7 +651,7 @@ $(function () {
             return;
         }
 
-        // A operação manual de nível deve preservar exatamente a posição escolhida.
+        // A operação de indentação/desindentação deve preservar a posição manual.
         renderizar({ preservarOrdem: true });
 
         linhaAtivaId = tarefa.id;
@@ -1816,7 +1880,7 @@ $(function () {
         marcarLinhaAtiva();
     });
 
-    // Setas: descer = tarefa vira filha do irmão anterior; subir = tarefa volta ao nível do pai
+    // Setas: inferior = INDENTAR; superior = DESINDENTAR
     $('[data-gantt-btn-nivel="superior"]').on("click", () => moverNivel("subir"));
     $('[data-gantt-btn-nivel="Inferior"]').on("click", () => moverNivel("descer"));
 
