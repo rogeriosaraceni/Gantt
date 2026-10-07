@@ -115,7 +115,7 @@ $(function () {
     }
 
     const textoIntervalo = ([ini, fim], aberto = false) =>
-        ini ? `${formatarDataBR(ini)} — ${fim && !aberto ? formatarDataBR(fim) : "…"}` : "—" ;
+        ini ? `${formatarDataBR(ini)} — ${fim && !aberto ? formatarDataBR(fim) : "…"}` : "—";
 
     // ---------------------------------------------------------------
     // TAREFAS, GRUPOS E NUMERAÇÃO
@@ -213,39 +213,98 @@ $(function () {
     function ordenarTarefasPorData() {
         normalizarHierarquia();
 
-        // Início mais antigo primeiro; tarefas sem data ficam no fim.
-        // Para inverter (mais recente primeiro), troque por dataB.localeCompare(dataA).
-        const compararDatas = (dataA, dataB) => {
+        // Ordenação padrão: menor data de início planejada -> maior data.
+        // Datas vazias ficam por último.
+        const compararDatasAsc = (dataA, dataB) => {
             if (!dataA && !dataB) return 0;
             if (!dataA) return 1;
             if (!dataB) return -1;
-            return dataA.localeCompare(dataB);
+            if (dataA < dataB) return -1;
+            if (dataA > dataB) return 1;
+            return 0;
         };
 
-        // Atividade: menor início entre as tarefas dela. Tarefa: o próprio início planejado.
+        const cacheInicio = new Map();
+
+        // Obtém a data que representa a tarefa.
+        // Tarefa normal: planned[0].
+        // Grupo sem data própria: menor início encontrado nos descendentes.
         const obterInicioTarefa = (tarefa) => {
-            const datas = folhasDaTarefa(tarefa)
-                .map((f) => f.planned?.[0])
-                .filter(Boolean)
-                .sort();
+            if (!tarefa) return "";
 
-            return datas[0] || tarefa.planned?.[0] || "";
+            if (cacheInicio.has(tarefa.id)) {
+                return cacheInicio.get(tarefa.id);
+            }
+
+            if (tarefa.planned?.[0]) {
+                cacheInicio.set(tarefa.id, tarefa.planned[0]);
+                return tarefa.planned[0];
+            }
+
+            const filhos = estado.tasks.filter(
+                (filho) => filho.parentId === tarefa.id
+            );
+
+            let menorData = "";
+
+            filhos.forEach((filho) => {
+                const data = obterInicioTarefa(filho);
+                if (!data) return;
+
+                if (!menorData || data < menorData) {
+                    menorData = data;
+                }
+            });
+
+            cacheInicio.set(tarefa.id, menorData);
+            return menorData;
         };
 
-        const inicios = new Map(estado.tasks.map((t) => [t.id, obterInicioTarefa(t)]));
-        const porData = (a, b) => compararDatas(inicios.get(a.id), inicios.get(b.id));
+        // Guarda os filhos já ordenados. Isso evita perder a ordenação
+        // ao chamar filhosDiretos() novamente durante a reconstrução.
+        const filhosOrdenados = new Map();
+
+        estado.tasks.forEach((tarefa) => {
+            const filhos = estado.tasks
+                .filter((filho) => filho.parentId === tarefa.id)
+                .slice();
+
+            filhos.sort((a, b) =>
+                compararDatasAsc(
+                    obterInicioTarefa(a),
+                    obterInicioTarefa(b)
+                )
+            );
+
+            filhosOrdenados.set(tarefa.id, filhos);
+        });
 
         const raizes = estado.tasks
-            .filter((t) => t.parentId === null || t.parentId === undefined)
-            .sort(porData);
+            .filter(
+                (tarefa) =>
+                    tarefa.parentId === null ||
+                    tarefa.parentId === undefined
+            )
+            .slice();
 
+        raizes.sort((a, b) =>
+            compararDatasAsc(
+                obterInicioTarefa(a),
+                obterInicioTarefa(b)
+            )
+        );
+
+        // Reconstrói estado.tasks respeitando a ordem calculada.
         const novasTasks = [];
-        const adicionar = (tarefa) => {
+
+        const adicionarSubarvore = (tarefa) => {
             novasTasks.push(tarefa);
-            filhosDiretos(tarefa).sort(porData).forEach(adicionar);
+
+            const filhos = filhosOrdenados.get(tarefa.id) || [];
+            filhos.forEach(adicionarSubarvore);
         };
 
-        raizes.forEach(adicionar);
+        raizes.forEach(adicionarSubarvore);
         estado.tasks = novasTasks;
     }
 
@@ -273,6 +332,23 @@ $(function () {
 
     function reordenarNumeracao() {
         recalcularNumeracao();
+    }
+
+    function obterUltimoIndiceDaSubarvore(tarefa) {
+        const index = estado.tasks.indexOf(tarefa);
+        if (index < 0) return -1;
+
+        let ultimo = index;
+        for (let i = index + 1; i < estado.tasks.length; i++) {
+            const atual = estado.tasks[i];
+            if (atual.parentId === tarefa.id || estaDentroDaSubarvore(atual, tarefa)) {
+                ultimo = i;
+            } else if (nivelDaTarefa(atual) <= nivelDaTarefa(tarefa)) {
+                break;
+            }
+        }
+
+        return ultimo;
     }
 
     function estaDentroDaSubarvore(tarefa, ancestral) {
@@ -345,45 +421,21 @@ $(function () {
 
     const tarefaConcluida = (tarefa) => (Number(tarefa?.progress) || 0) >= 100 || !!tarefa?.real?.[1];
 
-    // Impedimento: a tarefa ainda não começou e existe uma predecessora
-    // que deveria ter terminado, mas continua pendente.
-    //
-    // IMPORTANTE:
-    // O Gantt pode reagendar automaticamente a data planejada da sucessora
-    // quando uma predecessora atrasa. Por isso, NÃO usamos apenas
-    // tarefa.planned[0] <= hoje para detectar o impedimento. Se fizéssemos
-    // isso, a própria rotina de reagendamento empurraria a data para o futuro
-    // e o impedimento nunca apareceria.
-    //
-    // O impedimento passa a ser baseado no fato real de que a predecessora
-    // ultrapassou o seu prazo planejado sem concluir.
+    // Impedimento: o início planejado já chegou, a tarefa não começou e alguma predecessora ainda não terminou
     function verificarImpedimento(tarefa) {
         if (tarefa.group) return filhasDoGrupo(tarefa).some(verificarImpedimento);
 
-        const naoIniciada =
-            !tarefa.real?.[0] &&
-            !(Number(tarefa.progress) > 0);
+        const inicioPlan = tarefa.planned?.[0];
+        const naoIniciada = !tarefa.real?.[0] && !(Number(tarefa.progress) > 0);
+        if (!inicioPlan || !naoIniciada || tarefaConcluida(tarefa) || inicioPlan > paraISO(new Date())) return false;
 
-        if (tarefaConcluida(tarefa) || !naoIniciada) return false;
-
-        const predecessoras = (tarefa.pred || [])
+        return (tarefa.pred || [])
             .map(buscarTarefa)
-            .filter(Boolean);
-
-        if (!predecessoras.length) return false;
-
-        // Se alguma predecessora já está atrasada e ainda não foi concluída,
-        // a atividade atual está efetivamente bloqueada pela dependência.
-        return predecessoras.some((pred) => {
-            if (tarefaConcluida(pred)) return false;
-            return verificarAtraso(pred);
-        });
+            .filter(Boolean)
+            .some((pred) => !tarefaConcluida(pred));
     }
 
-    // Risco: somente quando a própria tarefa não está atrasada nem impedida.
-    // Uma predecessora atrasada pode gerar risco; porém, se a tarefa ainda não
-    // começou e está bloqueada por essa predecessora, o indicador correto é
-    // Impedimento (🛑), que tem prioridade sobre Risco (⚠️).
+    // Risco (ainda sem atraso nem impedimento): predecessora atrasada ou progresso abaixo do esperado
     function verificarRisco(tarefa) {
         if (tarefa.group) return filhasDoGrupo(tarefa).some(verificarRisco);
         if (tarefaConcluida(tarefa) || verificarAtraso(tarefa) || verificarImpedimento(tarefa)) return false;
@@ -654,8 +706,8 @@ $(function () {
             return;
         }
 
-        // Após mover o nível, a tarefa assume a posição definida pela data de início.
-        renderizar();
+        // A operação de indentação/desindentação deve preservar a posição manual.
+        renderizar({ preservarOrdem: true });
 
         linhaAtivaId = tarefa.id;
         marcarLinhaAtiva();
@@ -852,7 +904,7 @@ $(function () {
 
                 const [ini, fim] = t.planned || [];
                 const novoInicio = paraISO(adicionarDias(analisarData(fimPredecessora), 1));
-                const deveMover = forcar.has(t.id) || !ini || ini < novoInicio;
+                const deveMover = !ini || ini < novoInicio;
                 if (!deveMover) return;
 
                 let novoFim = novoInicio;
@@ -896,7 +948,7 @@ $(function () {
 
                 const [ini, fim] = t.planned || [];
                 const novoInicio = paraISO(adicionarDias(analisarData(fimPredecessora), 1));
-                const deveMover = forcar.has(t.id) || !ini || ini < novoInicio;
+                const deveMover = !ini || ini < novoInicio;
                 if (!deveMover) return;
 
                 let novoFim = novoInicio;
@@ -1131,7 +1183,7 @@ $(function () {
     function renderLinhaQuickAdd(grupoId) {
         return `
             <tr class="quick-add-row" data-group-id="${grupoId}">
-                <td class="text-center"></td>
+                <td class="text-center" style="width: 80px;"></td>
                 <td class="text-center text-secondary"></td>
                 <td class="activity-cell">
                     <input
@@ -1146,7 +1198,7 @@ $(function () {
                 <td class="col-planned"></td>
                 <td class="col-real"></td>
                 <td class="col-predecessors"></td>
-                <td class="col-progress text-center"></td>
+                <td class="col-progress"></td>
             </tr>
         `;
     }
@@ -1264,8 +1316,8 @@ $(function () {
                             ${tarefa.reagendada ? '<i class="bi bi-arrow-repeat text-info" data-bs-toggle="tooltip" data-bs-title="Data ajustada pela predecessora"></i>' : ""}
                         </div>
                     </td>
-                    <td class="col-owner text-center">
-                        ${isGroup ? "<span>—</span>" : `<select name="responsavel" class="owner-select form-select" data-field="owner">${opcoesResponsavel(tarefa.owner)}</select>`}
+                    <td class="col-owner">
+                        ${isGroup ? "<span>—</span>" : `<select name="responsavel" class="owner-select" data-field="owner">${opcoesResponsavel(tarefa.owner)}</select>`}
                     </td>
                     <td class="col-planned text-center">
                         ${isGroup ? somenteLeitura(textoIntervalo(resumo.planned)) : htmlIntervaloData(tarefa, "planned")}
@@ -1274,13 +1326,10 @@ $(function () {
                         ${isGroup ? somenteLeitura(textoIntervalo(resumo.real, resumo.realAberto)) : htmlIntervaloData(tarefa, "real")}
                     </td>
                     <td class="col-predecessors">
-                        ${isGroup ? "<span>—</span>" : `<select name="predecessoras" class="pred-select form-select" data-field="pred" multiple>${opcoesPredecessora(tarefa)}</select>`}
+                        ${isGroup ? "<span>—</span>" : `<select name="predecessoras" class="pred-select" data-field="pred" multiple>${opcoesPredecessora(tarefa)}</select>`}
                     </td>
-                    <td class="col-progress text-center">
-                        ${isGroup ? somenteLeitura(`${resumo.progress}%`) : `
-                            <input type="number" name="percentual" min="0" max="100" class="progress-input form-control" data-field="progress" value="${tarefa.progress ?? 0}">
-                            `
-                        }
+                    <td class="col-progress">
+                        ${isGroup ? somenteLeitura(`${resumo.progress}%`) : `<input type="number" name="percentual" min="0" max="100" class="progress-input" data-field="progress" value="${tarefa.progress ?? 0}">`}
                     </td>
                 </tr>
             `);
@@ -1698,7 +1747,8 @@ $(function () {
                 executar: () => {
                     salvarValorNoEstado(inputEl);
                     reagendar([id]);
-                    renderizar();
+                    ordenarTarefasPorData();
+                    renderizar({ preservarOrdem: true });
                 },
                 cancelar: () => {
                     $input.val(valorAnteriorInput);
@@ -1709,7 +1759,8 @@ $(function () {
         } else {
             salvarValorNoEstado(inputEl);
             reagendar([id]);
-            renderizar();
+            ordenarTarefasPorData();
+            renderizar({ preservarOrdem: true });
         }
     });
 
