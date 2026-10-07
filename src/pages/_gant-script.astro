@@ -1645,8 +1645,8 @@ $(function () {
 
     $(document).on("change", ".date-input", function () {
         const inputEl = this;
-        const $input =$(inputEl);
-        const $row =$input.closest("tr");
+        const $input = $(inputEl);
+        const $row = $input.closest("tr");
         const id = Number($row.data("id"));
         const task = buscarTarefa(id);
         if (!task) return;
@@ -1655,6 +1655,19 @@ $(function () {
         if (val !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(val)) return;
 
         if (val === valorAnteriorInput) return;
+
+        // Pega o container pai que envolve as duas datas (inicial e final)
+        const $container = $input.closest('.date-range');
+        const dataInicial = $container.find('[data-index="0"]').val();
+        const dataFinal = $container.find('[data-index="1"]').val();
+
+        // Se ambas as datas estiverem preenchidas, verifica se a final é menor que a inicial
+        if (dataInicial && dataFinal && dataInicial > dataFinal) {
+            alert("A data final não pode ser menor que a data inicial.");
+            $input.val(valorAnteriorInput); // Restaura o campo para o valor anterior
+            return; // Interrompe a execução para não salvar no estado
+        }
+        // ---------------------------
 
         const field = $input.data("field");
         const index = Number($input.data("index"));
