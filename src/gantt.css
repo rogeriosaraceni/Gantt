@@ -126,9 +126,12 @@ gantt-shell / gantt-layout
 /*-----------------------------------------------------
 gantt-left - BLOCO CONGELADO
 ------------------------------------------------------*/
+.gantt-left{
+    --gantt-width-left: 1760px;
+}
 .gantt-left {
-    flex: 0 0 760px;
-    width: 760px;
+    flex: 0 0 var(--gantt-width-left);
+    width: var(--gantt-width-left);
     max-width: 68%;
     min-width: 0;
     border-right: 1px solid var(--g-border);
@@ -138,7 +141,7 @@ gantt-left - BLOCO CONGELADO
 }
 .gantt-left-scroll .left-table {
     width: max-content;
-    min-width: 760px;
+    min-width: var(--gantt-width-left);
 }
 
 /*-----------------------------------------------------
@@ -274,6 +277,7 @@ date-range
 .date-range {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 10px;
     width: 100%;
     min-width: 0;
@@ -305,17 +309,41 @@ date-range
 .pred-select,
 .progress-input {
     width: 100%;
-    border: 0;
+    border: 1px solid var(--g-border);
+    border-radius: var(--bs-border-radius);
     outline: 0;
-    background-color: transparent;
     font-size: 12px;
     color: var(--g-text);
+    padding: .375rem .75rem;
+}
+
+.pred-select{
     padding: 0;
+}
+.pred-select .ms-choice  {
+    height: 30px!important;
 }
 
 .progress-input {
     width: 45px;
+    text-align: center;
+    display: inline-block;
+    padding: .375rem .15rem;
 }
+
+/* Chrome, Safari, Edge e Opera */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 
 /*-----------------------------------------------------
 multipleselect

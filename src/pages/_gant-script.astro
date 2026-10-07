@@ -115,7 +115,7 @@ $(function () {
     }
 
     const textoIntervalo = ([ini, fim], aberto = false) =>
-        ini ? `${formatarDataBR(ini)} — ${fim && !aberto ? formatarDataBR(fim) : "…"}` : "—";
+        ini ? `${formatarDataBR(ini)} — ${fim && !aberto ? formatarDataBR(fim) : "…"}` : "—" ;
 
     // ---------------------------------------------------------------
     // TAREFAS, GRUPOS E NUMERAÇÃO
@@ -279,23 +279,6 @@ $(function () {
         recalcularNumeracao();
     }
 
-    function obterUltimoIndiceDaSubarvore(tarefa) {
-        const index = estado.tasks.indexOf(tarefa);
-        if (index < 0) return -1;
-
-        let ultimo = index;
-        for (let i = index + 1; i < estado.tasks.length; i++) {
-            const atual = estado.tasks[i];
-            if (atual.parentId === tarefa.id || estaDentroDaSubarvore(atual, tarefa)) {
-                ultimo = i;
-            } else if (nivelDaTarefa(atual) <= nivelDaTarefa(tarefa)) {
-                break;
-            }
-        }
-
-        return ultimo;
-    }
-
     function estaDentroDaSubarvore(tarefa, ancestral) {
         if (!tarefa || !ancestral) return false;
 
@@ -366,21 +349,45 @@ $(function () {
 
     const tarefaConcluida = (tarefa) => (Number(tarefa?.progress) || 0) >= 100 || !!tarefa?.real?.[1];
 
-    // Impedimento: o início planejado já chegou, a tarefa não começou e alguma predecessora ainda não terminou
+    // Impedimento: a tarefa ainda não começou e existe uma predecessora
+    // que deveria ter terminado, mas continua pendente.
+    //
+    // IMPORTANTE:
+    // O Gantt pode reagendar automaticamente a data planejada da sucessora
+    // quando uma predecessora atrasa. Por isso, NÃO usamos apenas
+    // tarefa.planned[0] <= hoje para detectar o impedimento. Se fizéssemos
+    // isso, a própria rotina de reagendamento empurraria a data para o futuro
+    // e o impedimento nunca apareceria.
+    //
+    // O impedimento passa a ser baseado no fato real de que a predecessora
+    // ultrapassou o seu prazo planejado sem concluir.
     function verificarImpedimento(tarefa) {
         if (tarefa.group) return filhasDoGrupo(tarefa).some(verificarImpedimento);
 
-        const inicioPlan = tarefa.planned?.[0];
-        const naoIniciada = !tarefa.real?.[0] && !(Number(tarefa.progress) > 0);
-        if (!inicioPlan || !naoIniciada || tarefaConcluida(tarefa) || inicioPlan > paraISO(new Date())) return false;
+        const naoIniciada =
+            !tarefa.real?.[0] &&
+            !(Number(tarefa.progress) > 0);
 
-        return (tarefa.pred || [])
+        if (tarefaConcluida(tarefa) || !naoIniciada) return false;
+
+        const predecessoras = (tarefa.pred || [])
             .map(buscarTarefa)
-            .filter(Boolean)
-            .some((pred) => !tarefaConcluida(pred));
+            .filter(Boolean);
+
+        if (!predecessoras.length) return false;
+
+        // Se alguma predecessora já está atrasada e ainda não foi concluída,
+        // a atividade atual está efetivamente bloqueada pela dependência.
+        return predecessoras.some((pred) => {
+            if (tarefaConcluida(pred)) return false;
+            return verificarAtraso(pred);
+        });
     }
 
-    // Risco (ainda sem atraso nem impedimento): predecessora atrasada ou progresso abaixo do esperado
+    // Risco: somente quando a própria tarefa não está atrasada nem impedida.
+    // Uma predecessora atrasada pode gerar risco; porém, se a tarefa ainda não
+    // começou e está bloqueada por essa predecessora, o indicador correto é
+    // Impedimento (🛑), que tem prioridade sobre Risco (⚠️).
     function verificarRisco(tarefa) {
         if (tarefa.group) return filhasDoGrupo(tarefa).some(verificarRisco);
         if (tarefaConcluida(tarefa) || verificarAtraso(tarefa) || verificarImpedimento(tarefa)) return false;
@@ -1128,7 +1135,7 @@ $(function () {
     function renderLinhaQuickAdd(grupoId) {
         return `
             <tr class="quick-add-row" data-group-id="${grupoId}">
-                <td class="text-center" style="width: 80px;"></td>
+                <td class="text-center"></td>
                 <td class="text-center text-secondary"></td>
                 <td class="activity-cell">
                     <input
@@ -1143,7 +1150,7 @@ $(function () {
                 <td class="col-planned"></td>
                 <td class="col-real"></td>
                 <td class="col-predecessors"></td>
-                <td class="col-progress"></td>
+                <td class="col-progress text-center"></td>
             </tr>
         `;
     }
@@ -1262,7 +1269,7 @@ $(function () {
                         </div>
                     </td>
                     <td class="col-owner">
-                        ${isGroup ? "<span>—</span>" : `<select name="responsavel" class="owner-select" data-field="owner">${opcoesResponsavel(tarefa.owner)}</select>`}
+                        ${isGroup ? "<span>—</span>" : `<select name="responsavel" class="owner-select form-select" data-field="owner">${opcoesResponsavel(tarefa.owner)}</select>`}
                     </td>
                     <td class="col-planned text-center">
                         ${isGroup ? somenteLeitura(textoIntervalo(resumo.planned)) : htmlIntervaloData(tarefa, "planned")}
@@ -1271,10 +1278,13 @@ $(function () {
                         ${isGroup ? somenteLeitura(textoIntervalo(resumo.real, resumo.realAberto)) : htmlIntervaloData(tarefa, "real")}
                     </td>
                     <td class="col-predecessors">
-                        ${isGroup ? "<span>—</span>" : `<select name="predecessoras" class="pred-select" data-field="pred" multiple>${opcoesPredecessora(tarefa)}</select>`}
+                        ${isGroup ? "<span>—</span>" : `<select name="predecessoras" class="pred-select form-select" data-field="pred" multiple>${opcoesPredecessora(tarefa)}</select>`}
                     </td>
-                    <td class="col-progress">
-                        ${isGroup ? somenteLeitura(`${resumo.progress}%`) : `<input type="number" name="percentual" min="0" max="100" class="progress-input" data-field="progress" value="${tarefa.progress ?? 0}">`}
+                    <td class="col-progress text-center">
+                        ${isGroup ? somenteLeitura(`${resumo.progress}%`) : `
+                            <input type="number" name="percentual" min="0" max="100" class="progress-input form-control" data-field="progress" value="${tarefa.progress ?? 0}">
+                            `
+                        }
                     </td>
                 </tr>
             `);
