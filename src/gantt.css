@@ -552,6 +552,14 @@ modal
     color: var(--g-atrasado);
 }
 
+.btn-modal-confirm{
+    color: #fff;
+    background-color: var(--g-primary);
+}
+.btn-modal-confirm:hover{
+    color: #fff;
+    background-color: #000;
+}
 
 /* Estilo Base do Marco (Losango) */
 .milestone-diamond {
