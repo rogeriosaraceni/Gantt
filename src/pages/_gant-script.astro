@@ -4,7 +4,6 @@ $(function () {
     // ---------------------------------------------------------------
     // ESTADO E VARIÁVEIS
     // ---------------------------------------------------------------
-
     const estado = {
         tasks: [],
         baselines: []
@@ -44,7 +43,6 @@ $(function () {
     // ---------------------------------------------------------------
     // UTILITÁRIOS GERAIS
     // ---------------------------------------------------------------
-
     function escaparHtml(valor) {
         return String(valor ?? "")
             .replace(/&/g, "&amp;")
@@ -56,7 +54,6 @@ $(function () {
     // ---------------------------------------------------------------
     // UTILITÁRIOS DE DATA
     // ---------------------------------------------------------------
-
     function analisarData(texto) {
         if (!texto) return null;
         const [ano, mes, dia] = texto.split("-").map(Number);
@@ -120,7 +117,6 @@ $(function () {
     // ---------------------------------------------------------------
     // TAREFAS, GRUPOS E NUMERAÇÃO
     // ---------------------------------------------------------------
-
     const buscarTarefa = (id) => estado.tasks.find((t) => t.id === Number(id));
 
     function normalizarHierarquia() {
@@ -408,7 +404,6 @@ $(function () {
     // ---------------------------------------------------------------
     // SELEÇÃO EM LOTE (CHECKBOXES)
     // ---------------------------------------------------------------
-
     function sincronizarSelecao() {
         const idsExistentes = new Set(estado.tasks.map((t) => t.id));
         selecionados.forEach((id) => !idsExistentes.has(id) && selecionados.delete(id));
@@ -446,7 +441,6 @@ $(function () {
     // ---------------------------------------------------------------
     // LINHA ATIVA E HIERARQUIA (INDENTAR / DESINDENTAR)
     // ---------------------------------------------------------------
-
     function atualizarBotoesNivel() {
         const tarefa = buscarTarefa(linhaAtivaId);
         const $desindentar = $('[data-gantt-btn-nivel="superior"]');
@@ -669,7 +663,6 @@ $(function () {
     // ---------------------------------------------------------------
     // CÁLCULO DO CAMINHO CRÍTICO (CPM)
     // ---------------------------------------------------------------
-
     function calcularCaminhoCritico() {
         estado.tasks.forEach((t) => (t.critical = false));
 
@@ -797,7 +790,6 @@ $(function () {
     // ---------------------------------------------------------------
     // DEPENDÊNCIAS E REAGENDAMENTO AUTOMÁTICO
     // ---------------------------------------------------------------
-
     function dependeDe(idA, idB, vistos = new Set()) {
         if (vistos.has(idA)) return false;
         vistos.add(idA);
@@ -956,7 +948,6 @@ $(function () {
     // ---------------------------------------------------------------
     // TIMELINE: ESCALA, PERÍODOS E POSIÇÕES
     // ---------------------------------------------------------------
-
     function intervaloParaEscala() {
         const hoje = new Date();
         let dataMin = new Date(hoje.getFullYear(), hoje.getMonth() - 6, 1);
@@ -1063,7 +1054,6 @@ $(function () {
     // ---------------------------------------------------------------
     // HTML DAS LINHAS
     // ---------------------------------------------------------------
-
     function opcoesResponsavel(selecionado) {
         let html = '<option value="">—</option>';
         responsaveis.forEach((resp) => {
@@ -1220,7 +1210,6 @@ $(function () {
     // ---------------------------------------------------------------
     // RENDERIZAÇÃO
     // ---------------------------------------------------------------
-
     function atualizarVisibilidadeColunas() {
         $(".column-toggle").each(function () {
             const colName = $(this).val();
@@ -1561,7 +1550,6 @@ $(function () {
         }
     }
 
-
     // Separe a lógica principal para não duplicar código
     function criarNovaLinha(inputElement) {
         const $input = $(inputElement);
@@ -1607,6 +1595,17 @@ $(function () {
         linhaAtivaId = novaTarefa.id;
         renderizar();
     }
+
+    // ---------------------------------------------------------------
+    // Helper
+    // ---------------------------------------------------------------
+    function exibirModalAlerta(mensagem) {
+        $("#modalAlertaMensagem").text(mensagem);
+        const modalEl = document.getElementById("modalAlerta");
+        const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modalInstance.show();
+    }
+
     // ---------------------------------------------------------------
     // EVENTOS
     // ---------------------------------------------------------------
@@ -1663,7 +1662,7 @@ $(function () {
 
         // Se ambas as datas estiverem preenchidas, verifica se a final é menor que a inicial
         if (dataInicial && dataFinal && dataInicial > dataFinal) {
-            alert("A data final não pode ser menor que a data inicial.");
+            exibirModalAlerta("A data final não pode ser menor que a data inicial.");
             $input.val(valorAnteriorInput); // Restaura o campo para o valor anterior
             return; // Interrompe a execução para não salvar no estado
         }
