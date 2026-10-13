@@ -56,7 +56,7 @@ import Layout from "../../layouts/Layout.astro";
                         <tr>
                             <th>Atividade</th>
                             <th class="text-center" id="thBaselineLabel">Linha de base</th>
-                            <th class="text-center">Atual / Real</th>
+                            <th class="text-center">Real (ou hoje)</th>
                             <th class="text-end">Desvio</th>
                         </tr>
                     </thead>
@@ -74,8 +74,16 @@ import Layout from "../../layouts/Layout.astro";
         if (!texto) return null;
         if (texto instanceof Date) return texto;
         const partes = String(texto).split("-").map(Number);
-        if (partes.length < 3) return null;
+        if (partes.length < 3 || isNaN(partes[0])) return null;
         return new Date(partes[0], partes[1] - 1, partes[2]);
+    }
+
+    function paraISO(objetoData) {
+        if (!objetoData) return "";
+        const ano = objetoData.getFullYear();
+        const mes = String(objetoData.getMonth() + 1).padStart(2, "0");
+        const dia = String(objetoData.getDate()).padStart(2, "0");
+        return `${ano}-${mes}-${dia}`;
     }
 
     function formatarDataBR(textoISO) {
@@ -93,7 +101,8 @@ import Layout from "../../layouts/Layout.astro";
 
     function diferencaDias(dataInicial, dataFinal) {
         if (!dataInicial || !dataFinal) return 0;
-        return Math.round((dataFinal - dataInicial) / 86400000);
+        const msPorDia = 86400000;
+        return Math.round((dataFinal - dataInicial) / msPorDia);
     }
 
     function escaparHtml(valor) {
@@ -105,10 +114,26 @@ import Layout from "../../layouts/Layout.astro";
     }
 
     $(document).ready(function () {
-        const dadosPai = window.parent?.dadosComparacaoGantt || window.dadosComparacaoGantt;
+        let dadosPai = window.parent?.dadosComparacaoGantt || window.opener?.dadosComparacaoGantt || window.dadosComparacaoGantt;
+
+        if (!dadosPai) {
+            try {
+                const stored = sessionStorage.getItem("dadosComparacaoGantt");
+                if (stored) dadosPai = JSON.parse(stored);
+            } catch (e) {}
+        }
 
         if (!dadosPai) {
             console.warn("Nenhum dado de comparação foi fornecido via window.dadosComparacaoGantt");
+            $("#compareBaselineSub").text("Nenhuma linha de base disponível para comparação. Abra o Gantt e salve uma linha de base primeiro.");
+            $("#compareImpactBanner").removeClass("alert-success").addClass("alert-warning").text("Aguardando dados do projeto...");
+            $("#tbodyCompareTasks").html(`
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-3">
+                        Nenhuma atividade para comparar. Salve uma linha de base no Gantt.
+                    </td>
+                </tr>
+            `);
             return;
         }
 
@@ -122,18 +147,17 @@ import Layout from "../../layouts/Layout.astro";
         if (Array.isArray(dadosPai.baselines) && dadosPai.baselines.length > 0) {
             baselines = dadosPai.baselines;
         } else {
-            // Fallback para caso venha um objeto simples com apenas 1 linha de base
             baselines = [{
-                versao: dadosPai.versao || "0",
+                versao: dadosPai.versao || "1",
                 data: dadosPai.dataSalva || new Date().toLocaleDateString('pt-BR'),
                 tasks: dadosPai.tasks || dadosPai.linhas || []
             }];
         }
 
         // 1. Popula o Select no padrão: "Linha de base X — DD/MM/AAAA"
-        const $select =$("#selectBaseline").empty();
+        const $select = $("#selectBaseline").empty();
         baselines.forEach((b, index) => {
-            const numVersao = b.versao !== undefined ? b.versao : index;
+            const numVersao = b.versao !== undefined ? b.versao : (index + 1);
             const dataStr = b.data ? ` — ${b.data}` : "";
             const optionText = `Linha de base ${numVersao}${dataStr}`;
 
@@ -149,62 +173,251 @@ import Layout from "../../layouts/Layout.astro";
             const baselineInfo = baselines[idxVersao];
             if (!baselineInfo) return;
 
-            const listaTarefas = baselineInfo.tasks || [];
-            const numVersao = baselineInfo.versao !== undefined ? baselineInfo.versao : idxVersao;
+            const listaTarefasBase = baselineInfo.tasks || [];
+            const tasksAtuais = Array.isArray(dadosPai.tasksAtuais) && dadosPai.tasksAtuais.length > 0
+                ? dadosPai.tasksAtuais
+                : listaTarefasBase;
+
+            const numVersao = baselineInfo.versao !== undefined ? baselineInfo.versao : (idxVersao + 1);
             const dataStr = baselineInfo.data ? ` — salva em ${baselineInfo.data}` : "";
 
-            // Corrige o acúmulo de texto no Subtítulo
             $("#compareBaselineSub").text(`Comparação com a Linha de Base ${numVersao}${dataStr}`);
             $("#thBaselineLabel").text(`Linha de base ${numVersao}`);
 
-            let totalAtrasadas = 0, totalAdiantadas = 0, totalNoPrazo = 0, maiorAtrasoFim = 0;
-            const $tbody =$("#tbodyCompareTasks").empty();
+            let totalAtrasadas = 0, totalAdiantadas = 0, totalNoPrazo = 0;
+            let maiorAtrasoFim = 0;
+            let fimMaxBaseDate = null;
+            let fimMaxAtualDate = null;
 
-            listaTarefas.forEach((tarefa) => {
-                if (tarefa.group) return;
+            const $tbody = $("#tbodyCompareTasks").empty();
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+            const hojeISO = paraISO(hoje);
 
-                const dtBaseIni = tarefa.baseRange?.[0] || tarefa.baseline?.[0] || tarefa.planned?.[0] || tarefa.dtBaseIni || "";
-                const dtBaseFim = tarefa.baseRange?.[1] || tarefa.baseline?.[1] || tarefa.planned?.[1] || tarefa.dtBaseFim || "";
-                const dtAtualIni = tarefa.atualRange?.[0] || tarefa.real?.[0] || tarefa.dtAtualIni || dtBaseIni;
-                const dtAtualFim = tarefa.atualRange?.[1] || tarefa.real?.[1] || tarefa.dtAtualFim || dtBaseFim;
+            function temFilhos(t, lista) {
+                return lista.some((item) => item.parentId === t.id);
+            }
 
+            function filhasDoGrupo(grupo, lista) {
+                const filhas = [];
+                const visitar = (pai) => {
+                    const diretos = lista.filter((t) => t.parentId === pai.id);
+                    diretos.forEach((filho) => {
+                        const temSub = lista.some((t) => t.parentId === filho.id);
+                        if (!temSub) {
+                            filhas.push(filho);
+                        } else {
+                            visitar(filho);
+                        }
+                    });
+                };
+                visitar(grupo);
+                return filhas;
+            }
+
+            function nivelDaTarefa(tarefa, lista) {
+                let nivel = 0;
+                let atual = tarefa;
+                const vistos = new Set();
+                while (atual?.parentId !== null && atual?.parentId !== undefined) {
+                    if (vistos.has(atual.id)) break;
+                    vistos.add(atual.id);
+                    atual = lista.find((item) => item.id === atual.parentId);
+                    if (!atual) break;
+                    nivel++;
+                }
+                return nivel;
+            }
+
+            if (tasksAtuais.length === 0) {
+                $tbody.append(`
+                    <tr>
+                        <td colspan="4" class="text-center text-muted py-3">
+                            Nenhuma atividade encontrada no projeto.
+                        </td>
+                    </tr>
+                `);
+                return;
+            }
+
+            tasksAtuais.forEach((tarefa) => {
+                const isGroupWithChildren = tarefa.group && temFilhos(tarefa, tasksAtuais);
+                const nivel = nivelDaTarefa(tarefa, tasksAtuais);
+                const nomeTarefa = tarefa.nome || `${tarefa.no ? tarefa.no + ' ' : ''}${tarefa.name || ''}`;
+
+                // Se for grupo/fase com tarefas subordinadas: exibe linha de agrupamento com resumo consolidado
+                if (isGroupWithChildren) {
+                    const filhas = filhasDoGrupo(tarefa, tasksAtuais);
+
+                    const basesFilhas = filhas.map((f) => {
+                        const fBase = listaTarefasBase.find((tb) => tb.id === f.id) || f;
+                        return fBase.baseline || fBase.planned || [];
+                    });
+                    const baseInicios = basesFilhas.map((b) => b[0]).filter(Boolean).sort();
+                    const baseFins = basesFilhas.map((b) => b[1]).filter(Boolean).sort();
+                    const grpBaseIni = baseInicios[0] || "";
+                    const grpBaseFim = baseFins[baseFins.length - 1] || "";
+
+                    const realInicios = filhas.map((f) => f.real?.[0] || f.planned?.[0]).filter(Boolean).sort();
+                    const realFins = filhas.map((f) => {
+                        const conc = (Number(f.progress) || 0) >= 100 || !!f.real?.[1];
+                        return conc ? (f.real?.[1] || f.planned?.[1] || "") : hojeISO;
+                    }).filter(Boolean).sort();
+                    const grpRealIni = realInicios[0] || "";
+                    const grpRealFim = realFins[realFins.length - 1] || "";
+
+                    let grpDesvioTexto = "No prazo";
+                    let grpClasseDesvio = "text-desvio-noprazo";
+                    if (grpBaseFim && grpRealFim) {
+                        const dBase = analisarData(grpBaseFim);
+                        const dReal = analisarData(grpRealFim);
+                        if (dBase && dReal) {
+                            const grpDiff = diferencaDias(dBase, dReal);
+                            if (grpDiff > 0) {
+                                grpDesvioTexto = `+${grpDiff} dia(s)`;
+                                grpClasseDesvio = "text-desvio-atrasado";
+                            } else if (grpDiff < 0) {
+                                grpDesvioTexto = `${grpDiff} dia(s)`;
+                                grpClasseDesvio = "text-desvio-adiantado";
+                            }
+                        }
+                    }
+
+                    const grpBaseStr = (grpBaseIni && grpBaseFim)
+                        ? `${formatarDataBR(grpBaseIni)} — ${formatarDataBR(grpBaseFim)}`
+                        : "—";
+                    const grpRealStr = (grpRealIni && grpRealFim)
+                        ? `${formatarDataBR(grpRealIni)} — ${formatarDataBR(grpRealFim)}`
+                        : "—";
+
+                    $tbody.append(`
+                        <tr class="table-light fw-bold">
+                            <td class="py-2" style="padding-left: ${nivel * 20 + 8}px;">
+                                <i class="bi bi-folder2-open text-primary me-1"></i>
+                                ${escaparHtml(nomeTarefa)}
+                            </td>
+                            <td class="text-center text-muted py-2">${escaparHtml(grpBaseStr)}</td>
+                            <td class="text-center py-2">${escaparHtml(grpRealStr)}</td>
+                            <td class="text-end ${grpClasseDesvio} py-2">${escaparHtml(grpDesvioTexto)}</td>
+                        </tr>
+                    `);
+                    return;
+                }
+
+                // Tarefa/atividade individual (folha)
+                const tarefaBase = listaTarefasBase.find((tb) => tb.id === tarefa.id) || tarefa;
+                const dtBaseIni = tarefaBase.baseline?.[0] || tarefaBase.planned?.[0] || tarefa.baseline?.[0] || tarefa.planned?.[0] || "";
+                const dtBaseFim = tarefaBase.baseline?.[1] || tarefaBase.planned?.[1] || tarefa.baseline?.[1] || tarefa.planned?.[1] || "";
+
+                if (dtBaseFim) {
+                    const dFimB = analisarData(dtBaseFim);
+                    if (dFimB && (!fimMaxBaseDate || dFimB > fimMaxBaseDate)) fimMaxBaseDate = dFimB;
+                }
+
+                const concluida = (Number(tarefa.progress) || 0) >= 100 || !!tarefa.real?.[1];
+
+                let dtRealIni = tarefa.real?.[0] || tarefa.planned?.[0] || dtBaseIni || "";
+                let dtRealFim = "";
+                let realRangeStr = "—";
                 let desvioTexto = "No prazo";
                 let classeDesvio = "text-desvio-noprazo";
+                let diffDias = 0;
 
-                if (dtBaseFim && dtAtualFim) {
-                    const diffDias = diferencaDias(analisarData(dtBaseFim), analisarData(dtAtualFim));
-                    if (diffDias > 0) {
-                        desvioTexto = `+${diffDias} dia(s)`;
-                        classeDesvio = "text-desvio-atrasado";
-                        totalAtrasadas++;
-                        if (diffDias > maiorAtrasoFim) maiorAtrasoFim = diffDias;
-                    } else if (diffDias < 0) {
-                        desvioTexto = `${diffDias} dia(s)`;
-                        classeDesvio = "text-desvio-adiantado";
-                        totalAdiantadas++;
+                const dBaseFim = analisarData(dtBaseFim);
+
+                if (concluida) {
+                    dtRealFim = tarefa.real?.[1] || tarefa.planned?.[1] || dtBaseFim || "";
+                    const dRealFim = analisarData(dtRealFim);
+
+                    if (dRealFim && (!fimMaxAtualDate || dRealFim > fimMaxAtualDate)) {
+                        fimMaxAtualDate = dRealFim;
+                    }
+
+                    if (dtRealIni && dtRealFim) {
+                        realRangeStr = `${formatarDataBR(dtRealIni)} — ${formatarDataBR(dtRealFim)}`;
+                    } else if (dtRealFim) {
+                        realRangeStr = formatarDataBR(dtRealFim);
+                    }
+
+                    if (dBaseFim && dRealFim) {
+                        diffDias = diferencaDias(dBaseFim, dRealFim);
+                        if (diffDias > 0) {
+                            desvioTexto = `+${diffDias} dia(s)`;
+                            classeDesvio = "text-desvio-atrasado";
+                            totalAtrasadas++;
+                            if (diffDias > maiorAtrasoFim) maiorAtrasoFim = diffDias;
+                        } else if (diffDias < 0) {
+                            desvioTexto = `${diffDias} dia(s)`;
+                            classeDesvio = "text-desvio-adiantado";
+                            totalAdiantadas++;
+                        } else {
+                            totalNoPrazo++;
+                        }
                     } else {
                         totalNoPrazo++;
                     }
                 } else {
-                    totalNoPrazo++;
+                    // SE AINDA NÃO CONCLUÍDA: a data de referência é HOJE
+                    dtRealFim = hojeISO;
+                    const dRealFim = analisarData(dtRealFim);
+
+                    if (dRealFim && (!fimMaxAtualDate || dRealFim > fimMaxAtualDate)) {
+                        fimMaxAtualDate = dRealFim;
+                    }
+
+                    const dRealIni = analisarData(dtRealIni);
+                    if (dRealIni && hoje >= dRealIni) {
+                        realRangeStr = `${formatarDataBR(dtRealIni)} — ${formatarDataBR(hojeISO)} (hoje)`;
+                    } else if (dRealIni && hoje < dRealIni) {
+                        const planFim = tarefa.planned?.[1] || dtBaseFim;
+                        realRangeStr = planFim ? `${formatarDataBR(dtRealIni)} — ${formatarDataBR(planFim)} (previsto)` : "Não iniciada";
+                    } else {
+                        realRangeStr = `${formatarDataBR(hojeISO)} (hoje)`;
+                    }
+
+                    if (dBaseFim) {
+                        if (hoje > dBaseFim) {
+                            // Prazo da linha de base expirou sem conclusão
+                            diffDias = diferencaDias(dBaseFim, hoje);
+                            desvioTexto = `+${diffDias} dia(s)`;
+                            classeDesvio = "text-desvio-atrasado";
+                            totalAtrasadas++;
+                            if (diffDias > maiorAtrasoFim) maiorAtrasoFim = diffDias;
+                        } else if (tarefa.planned?.[1] && analisarData(tarefa.planned[1]) > dBaseFim) {
+                            // Planejado atual ultrapassa a linha de base
+                            diffDias = diferencaDias(dBaseFim, analisarData(tarefa.planned[1]));
+                            desvioTexto = `+${diffDias} dia(s)`;
+                            classeDesvio = "text-desvio-atrasado";
+                            totalAtrasadas++;
+                            if (diffDias > maiorAtrasoFim) maiorAtrasoFim = diffDias;
+                        } else {
+                            diffDias = 0;
+                            desvioTexto = "No prazo";
+                            classeDesvio = "text-desvio-noprazo";
+                            totalNoPrazo++;
+                        }
+                    } else {
+                        desvioTexto = "No prazo";
+                        classeDesvio = "text-desvio-noprazo";
+                        totalNoPrazo++;
+                    }
                 }
 
                 const baseRangeStr = (dtBaseIni && dtBaseFim)
                     ? `${formatarDataBR(dtBaseIni)} — ${formatarDataBR(dtBaseFim)}`
-                    : (tarefa.baseRange || "—");
+                    : (tarefaBase.baseRange || "—");
 
-                const atualRangeStr = (dtAtualIni && dtAtualFim)
-                    ? `${formatarDataBR(dtAtualIni)} — ${formatarDataBR(dtAtualFim)}`
-                    : (tarefa.atualRange || "—");
-
-                const nomeTarefa = tarefa.nome || `${tarefa.no ? tarefa.no + ' ' : ''}${tarefa.name || ''}`;
+                const recuoPx = nivel * 20 + 8;
+                const iconeNivel = nivel > 0 ? '<i class="bi bi-arrow-return-right text-muted small me-1"></i>' : '';
 
                 $tbody.append(`
                     <tr>
-                        <td class="fw-medium">${escaparHtml(nomeTarefa)}</td>
+                        <td class="fw-medium" style="padding-left: ${recuoPx}px;">
+                            ${iconeNivel}${escaparHtml(nomeTarefa)}
+                        </td>
                         <td class="text-center text-muted">${escaparHtml(baseRangeStr)}</td>
-                        <td class="text-center">${escaparHtml(atualRangeStr)}</td>
-                        <td class="text-end ${classeDesvio}">${escaparHtml(tarefa.textoDesvio || desvioTexto)}</td>
+                        <td class="text-center">${escaparHtml(realRangeStr)}</td>
+                        <td class="text-end ${classeDesvio}">${escaparHtml(desvioTexto)}</td>
                     </tr>
                 `);
             });
@@ -215,10 +428,23 @@ import Layout from "../../layouts/Layout.astro";
             $("#cntNoPrazo").text(totalNoPrazo);
 
             // Atualiza Banner de Impacto
-            const $banner =$("#compareImpactBanner");
-            if (maiorAtrasoFim > 0) {
+            const $banner = $("#compareImpactBanner");
+            let impactoDias = 0;
+            if (fimMaxBaseDate && fimMaxAtualDate) {
+                impactoDias = diferencaDias(fimMaxBaseDate, fimMaxAtualDate);
+            } else {
+                impactoDias = maiorAtrasoFim;
+            }
+
+            if (impactoDias > 0) {
                 $banner.removeClass("alert-success alert-info").addClass("alert-danger")
-                       .text(`Impacto no prazo final do projeto: atraso de ${maiorAtrasoFim} dia(s)`);
+                       .text(`Impacto no prazo final do projeto: atraso de ${impactoDias} dia(s)`);
+            } else if (maiorAtrasoFim > 0) {
+                $banner.removeClass("alert-success alert-info").addClass("alert-danger")
+                       .text(`Impacto no prazo final do projeto: atividades atrasadas em até ${maiorAtrasoFim} dia(s)`);
+            } else if (impactoDias < 0 && totalAtrasadas === 0) {
+                $banner.removeClass("alert-success alert-danger").addClass("alert-info")
+                       .text(`Impacto no prazo final do projeto: adiantado em ${Math.abs(impactoDias)} dia(s) em relação à linha de base`);
             } else if (totalAdiantadas > 0 && totalAtrasadas === 0) {
                 $banner.removeClass("alert-success alert-danger").addClass("alert-info")
                        .text(`Impacto no prazo final do projeto: adiantado em relação à linha de base`);

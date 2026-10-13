@@ -1906,6 +1906,7 @@ $(function () {
         estado.tasks.forEach((t) => {
             t.baseline = [...(t.planned || ["", ""])];
         });
+        compararLinhaBase = true;
 
         const numeroVersao = estado.baselines.length + 1;
         const dataHoje = new Date().toLocaleDateString("pt-BR", {
@@ -1921,7 +1922,7 @@ $(function () {
             tasks: JSON.parse(JSON.stringify(estado.tasks))
         });
 
-        const $lista =$("#listaBaselines").empty();
+        const $lista = $("#listaBaselines").empty();
         estado.baselines.forEach((b) => {
             $lista.append(`
                 <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -1940,7 +1941,7 @@ $(function () {
 
     $('[data-gantt-btn="compare"]').on("click", function () {
         if (!estado.baselines.length) {
-            alert("Nenhuma linha de base foi salva ainda.");
+            exibirModalAlerta("Nenhuma linha de base foi salva ainda. Clique em 'Salvar linha de base' antes de comparar.");
             return;
         }
 
@@ -1950,9 +1951,13 @@ $(function () {
             tasksAtuais: JSON.parse(JSON.stringify(estado.tasks))
         };
 
+        try {
+            sessionStorage.setItem("dadosComparacaoGantt", JSON.stringify(window.dadosComparacaoGantt));
+        } catch (e) {}
+
         if ($.magnificPopup) {
             $.magnificPopup.open({
-                items: { src: "/popups/compara-linha-base" },
+                items: { src: `/popups/compara-linha-base?t=${Date.now()}` },
                 type: "iframe",
                 iframe: {
                     markup: '<div class="mfp-iframe-scaler" style="padding-top: 80vh;">' +
