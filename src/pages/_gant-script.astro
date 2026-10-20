@@ -856,6 +856,8 @@ $(function () {
                 }
 
                 t.planned = [novoInicio, novoFim];
+                if (ini !== novoInicio) ajustarRealAoInicio(t, novoInicio, !!(ini && fim));
+
                 t.reagendada = mudou = moveu = true;
 
                 forcar.add(t.id);
@@ -901,6 +903,7 @@ $(function () {
 
                 if (ini !== novoInicio || fim !== novoFim) {
                     t.planned = [novoInicio, novoFim];
+                    if (ini !== novoInicio) ajustarRealAoInicio(t, novoInicio, !!(ini && fim));
                     t.reagendada = true;
                     mudou = true;
                     alteradas.add(t.id);
@@ -914,6 +917,19 @@ $(function () {
         }
 
         return Array.from(alteradas);
+    }
+
+    // Remove predecessoras que passaram a começar depois da tarefa.
+    function removerPredecessorasInvalidas() {
+        estado.tasks.forEach((t) => {
+            const iniTarefa = t.planned?.[0];
+            if (!iniTarefa || !t.pred?.length) return;
+
+            t.pred = t.pred.filter((pid) => {
+                const iniPred = buscarTarefa(pid)?.planned?.[0];
+                return !iniPred || iniPred <= iniTarefa;
+            });
+        });
     }
 
     function salvarValorNoEstado(inputEl) {
@@ -1062,11 +1078,29 @@ $(function () {
         return html;
     }
 
+    // Uma tarefa só pode ser predecessora de outra que começa depois dela.
+    // Em caso de mesmo início, vale a ordem em que aparecem na lista.
+    // Se faltar data em alguma das duas, não há como comparar e a opção é liberada.
+    function podeSerPredecessora(candidata, tarefa) {
+        const iniCandidata = candidata.planned?.[0];
+        const iniTarefa = tarefa.planned?.[0];
+
+        if (!iniCandidata || !iniTarefa) return true;
+        if (iniCandidata !== iniTarefa) return iniCandidata < iniTarefa;
+
+        return estado.tasks.indexOf(candidata) < estado.tasks.indexOf(tarefa);
+    }
+
     function opcoesPredecessora(tarefaAtual) {
         const selecionadas = [].concat(tarefaAtual.pred || []);
 
         return estado.tasks
-            .filter((t) => !t.group && t.id !== tarefaAtual.id && !dependeDe(t.id, tarefaAtual.id))
+            .filter((t) =>
+                !t.group &&
+                t.id !== tarefaAtual.id &&
+                !dependeDe(t.id, tarefaAtual.id) &&
+                (selecionadas.includes(t.id) || podeSerPredecessora(t, tarefaAtual))
+            )
             .map((t) => `<option value="${t.id}"${selecionadas.includes(t.id) ? " selected" : ""}>${escaparHtml(`${t.no} — ${t.name}`)}</option>`)
             .join("");
     }
@@ -1532,6 +1566,7 @@ $(function () {
             ordenarTarefasPorData();
         }
 
+        removerPredecessorasInvalidas();
         recalcularNumeracao();
         calcularCaminhoCritico();
         renderizarEsquerda();
@@ -1604,6 +1639,22 @@ $(function () {
         const modalEl = document.getElementById("modalAlerta");
         const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
         modalInstance.show();
+    }
+
+    // Alinha as datas reais ao novo início do planejado, mantendo a duração.
+    // Só age se o planejado já estava preenchido e se o real já existe.
+    // Acompanha nos dois sentidos (predecessora que termina mais tarde ou mais cedo).
+    function ajustarRealAoInicio(tarefa, novoInicio, tinhaPlanejado) {
+        if (!tinhaPlanejado) return;
+
+        const [iniReal, fimReal] = tarefa.real || [];
+        if (!iniReal || iniReal === novoInicio) return;
+
+        const dias = diferencaDias(analisarData(iniReal), analisarData(novoInicio));
+        tarefa.real = [
+            novoInicio,
+            fimReal ? paraISO(adicionarDias(analisarData(fimReal), dias)) : ""
+        ];
     }
 
     // ---------------------------------------------------------------
