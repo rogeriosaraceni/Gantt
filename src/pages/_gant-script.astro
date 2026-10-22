@@ -522,6 +522,26 @@ $(function () {
         return true;
     }
 
+    // Quando uma tarefa final (folha) recebe filhos, ela vira atividade e passa a ser apenas
+    // o resumo das filhas. Por isso:
+    // - datas, progresso, responsável e predecessoras próprias deixam de valer (seriam lixo
+    //   escondido, mas ainda influenciando o reagendamento);
+    // - quem dependia dela passa a depender das tarefas finais que ficaram dentro dela;
+    // - nenhuma filha pode ficar dependendo da própria atividade-pai.
+    function converterFolhaEmGrupo(grupo) {
+        const folhas = folhasDaTarefa(grupo).map((f) => f.id);
+        const idsDescendentes = new Set(descendentesDaTarefa(grupo).map((d) => d.id));
+
+        estado.tasks.forEach((t) => {
+            if (t.id === grupo.id || !(t.pred || []).includes(grupo.id)) return;
+
+            const novas = idsDescendentes.has(t.id) ? [] : folhas.filter((f) => !dependeDe(f, t.id));
+            t.pred = [...new Set([...t.pred.filter((p) => p !== grupo.id), ...novas])];
+        });
+
+        Object.assign(grupo, { pred: [], planned: ["", ""], real: ["", ""], progress: 0, owner: "" });
+    }
+
     function moverNivelParaBaixo(tarefa) {
         // INDENTAR
         //
@@ -547,6 +567,9 @@ $(function () {
         const novoPai = irmaos[indiceIrmao - 1];
         if (!novoPai) return false;
 
+        // Se o novo pai ainda não tinha filhos, ele está virando atividade agora.
+        const novoPaiEraFolha = !temFilhos(novoPai);
+
         // Move a tarefa inteira, preservando todos os seus filhos.
         const bloco = removerBlocoDaSubarvore(tarefa);
         if (!bloco.length) return false;
@@ -561,6 +584,9 @@ $(function () {
         // Isso garante, por exemplo:
         // 1.1.2 + 1.2 -> 1.1.1 + 1.1.2
         if (!inserirBlocoComoPrimeiroFilho(bloco, novoPai)) return false;
+
+        // Limpa os dados próprios do pai e acerta as predecessoras que apontavam para ele.
+        if (novoPaiEraFolha) converterFolhaEmGrupo(novoPai);
 
         atualizarEstadoDosGrupos();
         recalcularNumeracao();
@@ -824,6 +850,10 @@ $(function () {
         return fimPlan || "";
     }
 
+    // "ids" são as tarefas que devem ser SEMPRE recalculadas a partir das predecessoras
+    // (ex.: quando a predecessora acabou de ser escolhida). Tarefas fora dessa lista só são
+    // movidas se começarem antes do término da predecessora, e uma data digitada à mão que
+    // já respeita a predecessora é preservada.
     function reagendar(ids = []) {
         const forcar = new Set(ids);
         let moveu = false;
@@ -919,15 +949,23 @@ $(function () {
         return Array.from(alteradas);
     }
 
-    // Remove predecessoras que passaram a começar depois da tarefa.
+    // Remove predecessoras inválidas:
+    // - que passaram a começar depois da tarefa;
+    // - quando nenhuma das duas tem data, as que estão ABAIXO da tarefa na lista
+    //   (ex.: a 1.1 apontando para a 1.2).
     function removerPredecessorasInvalidas() {
         estado.tasks.forEach((t) => {
+            if (!t.pred?.length) return;
+
             const iniTarefa = t.planned?.[0];
-            if (!iniTarefa || !t.pred?.length) return;
 
             t.pred = t.pred.filter((pid) => {
-                const iniPred = buscarTarefa(pid)?.planned?.[0];
-                return !iniPred || iniPred <= iniTarefa;
+                const pred = buscarTarefa(pid);
+                const iniPred = pred?.planned?.[0];
+
+                if (!iniTarefa && !iniPred) return !pred || estado.tasks.indexOf(pred) < estado.tasks.indexOf(t);
+
+                return !iniTarefa || !iniPred || iniPred <= iniTarefa;
             });
         });
     }
@@ -1078,17 +1116,19 @@ $(function () {
         return html;
     }
 
-    // Uma tarefa só pode ser predecessora de outra que começa depois dela.
-    // Em caso de mesmo início, vale a ordem em que aparecem na lista.
-    // Se faltar data em alguma das duas, não há como comparar e a opção é liberada.
+    // Uma tarefa só pode ser predecessora de outra que está ACIMA dela.
+    // Com as duas datas, vale o início (a candidata precisa começar antes).
+    // Em caso de mesmo início, ou se faltar data em alguma das duas, vale a ordem na lista:
+    // assim a primeira tarefa nunca tem predecessora, e 1.2 só pode depender de 1.1.
     function podeSerPredecessora(candidata, tarefa) {
         const iniCandidata = candidata.planned?.[0];
         const iniTarefa = tarefa.planned?.[0];
 
-        if (!iniCandidata || !iniTarefa) return true;
-        if (iniCandidata !== iniTarefa) return iniCandidata < iniTarefa;
+        if (!iniCandidata || !iniTarefa || iniCandidata === iniTarefa) {
+            return estado.tasks.indexOf(candidata) < estado.tasks.indexOf(tarefa);
+        }
 
-        return estado.tasks.indexOf(candidata) < estado.tasks.indexOf(tarefa);
+        return iniCandidata < iniTarefa;
     }
 
     function opcoesPredecessora(tarefaAtual) {
@@ -1214,15 +1254,22 @@ $(function () {
         return fins.length ? analisarData(fins.pop()) : null;
     }
 
-    function exibirModalConfirmacaoAjuste(diasDiff, dependentesQtd) {
-        let textoImpacto = "";
-        if (diasDiff < 0) {
-            textoImpacto = `O projeto terá um adiantamento de <strong>${Math.abs(diasDiff)} dias</strong>.`;
-        } else if (diasDiff > 0) {
-            textoImpacto = `O projeto terá um atraso de <strong>${diasDiff} dias</strong>.`;
-        } else {
-            textoImpacto = `O prazo final do projeto permanecerá o mesmo.`;
+    // diasDiff = null: não há linha de base, então o impacto no prazo do projeto não é exibido.
+    // textoAtraso: aviso de que a data informada deixa a atividade atrasada.
+    function exibirModalConfirmacaoAjuste(diasDiff, dependentesQtd, textoAtraso = "") {
+        const partes = textoAtraso ? [textoAtraso] : [];
+
+        if (diasDiff !== null) {
+            if (diasDiff < 0) {
+                partes.push(`O projeto terá um adiantamento de <strong>${Math.abs(diasDiff)} dias</strong>.`);
+            } else if (diasDiff > 0) {
+                partes.push(`O projeto terá um atraso de <strong>${diasDiff} dias</strong>.`);
+            } else {
+                partes.push(`O prazo final do projeto permanecerá o mesmo.`);
+            }
         }
+
+        const textoImpacto = partes.join("<br>");
 
         let textoDep = "";
         if (dependentesQtd > 0) {
@@ -1260,16 +1307,13 @@ $(function () {
             const nivel = nivelDaTarefa(tarefa);
             const classeLinha = isGroup ? "group-row" : "child";
             const emAtraso = verificarAtraso(tarefa);
-            const criticoAtrasado = isGroup
-                ? filhasDoGrupo(tarefa).some((f) => verificarAtraso(f) && f.critical)
-                : emAtraso && tarefa.critical;
-            const atrasadoNormal = emAtraso && !criticoAtrasado;
             const impedido = verificarImpedimento(tarefa);
             const emRisco = verificarRisco(tarefa);
             const resumo = isGroup ? resumoGrupo(tarefa) : null;
             const somenteLeitura = (texto) => `<span class="small text-secondary">${texto}</span>`;
             const recuo = nivel * 22;
 
+            // O caminho crítico não tem ícone: ele é indicado apenas pela cor da barra na timeline.
             $body.append(`
                 <tr class="${classeLinha}" data-id="${tarefa.id}">
                     <td class="text-center" style="width: 80px;">
@@ -1280,8 +1324,7 @@ $(function () {
                         <div class="d-flex align-items-center gap-1" style="padding-left:${recuo}px;">
                             ${nivel > 0 ? '<i class="bi bi-arrow-return-right text-secondary small"></i>' : ""}
                             <input type="text" name="atividade" class="activity-input" data-field="name" data-id="${tarefa.id}" value="${escaparHtml(tarefa.name)}" ${isGroup ? 'style="font-weight:600"' : ""}>
-                            ${criticoAtrasado ? '<i class="bi bi-exclamation-triangle-fill status-critical" data-bs-toggle="tooltip" data-bs-title="Caminho Crítico"></i>' : ""}
-                            ${atrasadoNormal ? '<i class="bi bi-fire status-overdue" data-bs-toggle="tooltip" data-bs-title="Real Atrasado"></i>' : ""}
+                            ${emAtraso ? '<i class="bi bi-fire status-overdue" data-bs-toggle="tooltip" data-bs-title="Atrasado"></i>' : ""}
                             ${impedido ? '<i class="bi bi-stop-circle-fill legend-blocked" data-bs-toggle="tooltip" data-bs-title="Impedimento: aguardando predecessora"></i>' : ""}
                             ${emRisco ? '<i class="bi bi-exclamation-circle-fill legend-risk" data-bs-toggle="tooltip" data-bs-title="Risco de atraso"></i>' : ""}
                             ${tarefa.reagendada ? '<i class="bi bi-arrow-repeat text-info" data-bs-toggle="tooltip" data-bs-title="Data ajustada pela predecessora"></i>' : ""}
@@ -1442,19 +1485,20 @@ $(function () {
                     || (datasReal[0] ? (hojeISO > datasReal[0] ? hojeISO : datasReal[0]) : (tarefa.planned?.[1] || dataInicioBarra));
                 const marco = (!realAberto || tarefa.isMilestone) && ehMarco(tarefa, dataInicioBarra, dataFimBarra);
                 const emAtraso = verificarAtraso(tarefa);
-                const criticoAtrasado = tarefa.group
-                    ? filhasDoGrupo(tarefa).some((f) => verificarAtraso(f) && f.critical)
-                    : emAtraso && tarefa.critical;
+
+                // Caminho crítico: toda tarefa final que, se atrasar, atrasa o fim do projeto.
+                // A atividade (grupo) é só um resumo e não é destacada.
+                const noCaminhoCritico = !tarefa.group && !!tarefa.critical;
 
                 const pct = Math.min(100, Math.max(0, resumo ? resumo.progress : (tarefa.progress ?? 0)));
 
                 if (marco) {
                     let marcoClass = "milestone-diamond";
                     if (pct === 100) marcoClass += " completed";
-                    else if (criticoAtrasado || emAtraso) marcoClass += " overdue";
-                    if (tarefa.critical) marcoClass += " critical";
+                    else if (emAtraso) marcoClass += " overdue";
+                    if (noCaminhoCritico) marcoClass += " critical";
 
-                    const sufixo = ` (Marco) - ${formatarDataBR(dataInicioBarra)}`;
+                    const sufixo = `${noCaminhoCritico ? " (Caminho crítico)" : ""} (Marco) - ${formatarDataBR(dataInicioBarra)}`;
 
                     $row.append(`
                         <div
@@ -1468,10 +1512,10 @@ $(function () {
                     `);
                 } else {
                     let barClass = tarefa.group ? "bar group-bar" : "bar task-bar";
-                    if (criticoAtrasado) barClass += " critical";
+                    if (noCaminhoCritico) barClass += " critical";
                     else if (emAtraso) barClass += " overdue";
 
-                    const sufixo = `${tarefa.group ? " (consolidado)" : ""} (${pct}%) - ${formatarDataBR(dataInicioBarra)} a ${formatarDataBR(dataFimBarra)}`;
+                    const sufixo = `${tarefa.group ? " (consolidado)" : ""}${noCaminhoCritico ? " (Caminho crítico)" : ""} (${pct}%) - ${formatarDataBR(dataInicioBarra)} a ${formatarDataBR(dataFimBarra)}`;
 
                     $row.append(`
                         <div
@@ -1531,6 +1575,8 @@ $(function () {
                     const res = salvarValorNoEstado(el);
                     if (!res || JSON.stringify(res.task.pred) === antes) return;
 
+                    // Predecessora escolhida: o início da sucessora é recalculado para o dia seguinte
+                    // ao término da predecessora (mesmo que já houvesse uma data).
                     reagendar([res.task.id]);
                     setTimeout(renderizar);
                 }
@@ -1695,10 +1741,13 @@ $(function () {
 
 
     // Alteração de datas (planejado e real).
-    // Enquanto a tarefa não tem nenhuma data real preenchida, a alteração é aplicada
-    // direto, sem aviso, pois ainda estamos na fase de planejamento.
-    // O modal de confirmação (atraso/adiantamento) só aparece quando a tarefa já tem
-    // data real e a mudança impacta o prazo do projeto ou move atividades dependentes.
+    // Enquanto a tarefa não tem nenhuma data real preenchida, ou ainda não existe linha de base
+    // salva, a alteração é aplicada direto, sem aviso: ainda estamos construindo o cronograma e
+    // não há nada para comparar. O modal de confirmação (atraso/adiantamento) só aparece quando
+    // já existe linha de base, a tarefa tem data real e a mudança impacta o prazo do projeto ou
+    // move atividades dependentes.
+    // Exceção: término real depois do fim planejado (atraso) sempre pede confirmação, mesmo sem
+    // linha de base, pois a data pode ter sido digitada errada.
     $(document).on("change", ".date-input", function () {
         const inputEl = this;
         const $input = $(inputEl);
@@ -1742,18 +1791,40 @@ $(function () {
 
         const aplicarAjuste = () => {
             salvarValorNoEstado(inputEl);
-            reagendar([id]);
+
+            // NÃO força a própria tarefa editada: antes ela era sempre recalculada a partir da
+            // predecessora e a data digitada era desfeita (ficava a data antiga na tela).
+            // Agora a data digitada é mantida e só é empurrada se começar antes do término da
+            // predecessora. As sucessoras dela continuam sendo empurradas normalmente.
+            reagendar();
             renderizar();
+
+            const inicioAplicado = task.planned?.[0];
+            if (field === "planned" && index === 0 && val && inicioAplicado !== val) {
+                setTimeout(() => {
+                    exibirModalAlerta(`O início de "${task.name}" foi ajustado para ${formatarDataBR(inicioAplicado)}, pois a atividade só pode começar depois do término da predecessora.`);
+                }, 400);
+            }
         };
 
-        // Ainda em fase de planejamento: aplica direto, sem confirmação
-        if (!temReal) {
+        // Término real depois do fim planejado = atraso da atividade
+        const fimRealNovo = draftTask?.real?.[1];
+        const fimPlanejado = draftTask?.planned?.[1];
+        const diasAtraso = field === "real" && index === 1 && fimRealNovo && fimPlanejado && fimRealNovo > fimPlanejado
+            ? diferencaDias(analisarData(fimPlanejado), analisarData(fimRealNovo))
+            : 0;
+
+        // O impacto no prazo do projeto só é comparado quando já existe linha de base
+        const comparaProjeto = temReal && estado.baselines.length > 0;
+
+        // Fase de construção do cronograma: aplica direto, a menos que a data deixe a atividade atrasada
+        if (!comparaProjeto && !diasAtraso) {
             aplicarAjuste();
             return;
         }
 
         const maxDataAntes = obterFimMaximoProjeto(estado.tasks);
-        const afetadas = reagendarSimulacao(cloneTasks, [id]);
+        const afetadas = reagendarSimulacao(cloneTasks);
         const maxDataDepois = obterFimMaximoProjeto(cloneTasks);
 
         const variacaoFimProjeto = maxDataAntes && maxDataDepois ? diferencaDias(maxDataAntes, maxDataDepois) : 0;
@@ -1769,10 +1840,14 @@ $(function () {
             return tOrig && tSim && JSON.stringify(tOrig.planned) !== JSON.stringify(tSim.planned);
         }).length;
 
-        if (variacaoFimProjeto === 0 && qtdDependentesAfetadas === 0) {
+        if (!diasAtraso && variacaoFimProjeto === 0 && qtdDependentesAfetadas === 0) {
             aplicarAjuste();
             return;
         }
+
+        const textoAtraso = diasAtraso
+            ? `O término real (${formatarDataBR(fimRealNovo)}) é posterior ao fim planejado (${formatarDataBR(fimPlanejado)}): a atividade ficará com <strong>${diasAtraso} dia${diasAtraso > 1 ? "s" : ""} de atraso</strong>. Confirme se a data foi informada corretamente.`
+            : "";
 
         acaoPendenteAjuste = {
             inputEl,
@@ -1780,7 +1855,7 @@ $(function () {
             cancelar: () => $input.val(valorAnteriorInput)
         };
 
-        exibirModalConfirmacaoAjuste(diferencaDiasProjeto, qtdDependentesAfetadas);
+        exibirModalConfirmacaoAjuste(comparaProjeto ? diferencaDiasProjeto : null, qtdDependentesAfetadas, textoAtraso);
     });
 
     $(document).on("input", ".activity-input", function () {
@@ -1980,7 +2055,7 @@ $(function () {
             tasks: JSON.parse(JSON.stringify(estado.tasks))
         });
 
-        const $lista = $("#listaBaselines").empty();
+        const $lista =$("#listaBaselines").empty();
         estado.baselines.forEach((b) => {
             $lista.append(`
                 <li class="list-group-item d-flex justify-content-between align-items-center">
