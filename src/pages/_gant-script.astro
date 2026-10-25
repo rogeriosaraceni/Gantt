@@ -1004,7 +1004,7 @@ $(function () {
     // ---------------------------------------------------------------
     function intervaloParaEscala() {
         const hoje = new Date();
-        let dataMin = new Date(hoje.getFullYear(), hoje.getMonth() - 6, 1);
+        let dataMin = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
         let dataMax = new Date(hoje.getFullYear(), hoje.getMonth() + 7, 0);
 
         estado.tasks.forEach((tarefa) => {
@@ -1022,14 +1022,14 @@ $(function () {
         });
 
         if (escalaAtual === "week") {
-            dataMin = inicioDaSemana(adicionarDias(dataMin, -14));
+            dataMin = inicioDaSemana(adicionarDias(dataMin, -7));
             dataMax = inicioDaSemana(adicionarDias(dataMax, 14));
             dataMax = adicionarDias(dataMax, 6);
         } else if (escalaAtual === "month") {
-            dataMin = inicioDoMes(adicionarDias(dataMin, -20));
+            dataMin = inicioDoMes(dataMin);
             dataMax = new Date(dataMax.getFullYear(), dataMax.getMonth() + 2, 0);
         } else {
-            dataMin = inicioDoAno(adicionarDias(dataMin, -60));
+            dataMin = inicioDoAno(dataMin);
             dataMax = new Date(dataMax.getFullYear() + 1, 11, 31);
         }
 
