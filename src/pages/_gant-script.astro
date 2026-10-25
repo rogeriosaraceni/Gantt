@@ -674,8 +674,9 @@ $(function () {
             return;
         }
 
-        // Após mover o nível, a tarefa assume a posição definida pela data de início.
-        renderizar();
+        // Após mover o nível, preserva a ordem manual definida pelo usuário.
+        // Não re-ordena por data para não desfazer a hierarquia recém alterada.
+        renderizar({ preservarOrdem: true });
 
         linhaAtivaId = tarefa.id;
         marcarLinhaAtiva();
@@ -949,23 +950,24 @@ $(function () {
         return Array.from(alteradas);
     }
 
-    // Remove predecessoras inválidas:
-    // - que passaram a começar depois da tarefa;
-    // - quando nenhuma das duas tem data, as que estão ABAIXO da tarefa na lista
-    //   (ex.: a 1.1 apontando para a 1.2).
+    // Remove apenas predecessoras que criariam CICLOS (A depende de B e B depende de A).
+    // Relações "fora de ordem" de data são permitidas — o usuário pode ter um motivo
+    // para definir uma predecessora com início posterior (ex.: ainda está planejando).
+    // Caso especial: quando nenhuma das duas tem data, remove apenas se não existe na lista
+    // (predecessor deletado).
     function removerPredecessorasInvalidas() {
         estado.tasks.forEach((t) => {
             if (!t.pred?.length) return;
 
-            const iniTarefa = t.planned?.[0];
-
             t.pred = t.pred.filter((pid) => {
+                // Remove se a tarefa predecessora foi deletada.
                 const pred = buscarTarefa(pid);
-                const iniPred = pred?.planned?.[0];
+                if (!pred) return false;
 
-                if (!iniTarefa && !iniPred) return !pred || estado.tasks.indexOf(pred) < estado.tasks.indexOf(t);
+                // Remove se criaria ciclo direto ou indireto (A → B → A).
+                if (dependeDe(pid, t.id)) return false;
 
-                return !iniTarefa || !iniPred || iniPred <= iniTarefa;
+                return true;
             });
         });
     }
