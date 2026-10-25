@@ -1818,6 +1818,9 @@ $(function () {
 
         const aplicarAjuste = () => {
             salvarValorNoEstado(inputEl);
+            if (task && task[field]) {
+                task[field][index] = val;
+            }
 
             // NÃO força a própria tarefa editada: antes ela era sempre recalculada a partir da
             // predecessora e a data digitada era desfeita (ficava a data antiga na tela).
