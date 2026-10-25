@@ -12,7 +12,7 @@
     "astro": "astro"
   },
   "dependencies": {
-    "astro": "^7.3.5",
+    "astro": "^7.4.2",
     "vite-plugin-full-reload": "^1.2.0"
   },
   "allowScripts": {
