@@ -469,7 +469,10 @@ $(function () {
         const podeIndentar = indiceIrmao > 0;
 
         // DESINDENTAR: a tarefa precisa estar dentro de outra tarefa/fase.
-        const podeDesindentar = tarefa.parentId !== null && tarefa.parentId !== undefined;
+        const podeDesindentar =
+            tarefa.parentId !== null &&
+            tarefa.parentId !== undefined;
+            irmaos.length > 1;
 
         $desindentar
             .prop("disabled", !podeDesindentar)
