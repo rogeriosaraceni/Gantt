@@ -37,6 +37,7 @@ $(function () {
     let predAberto = null;
     let acaoPendenteAjuste = null;
     let valorAnteriorInput = "";
+    let digitandoNoTeclado = false;
     let focoGrupoId = null;
     let linhaAtivaId = null;
 
@@ -1625,7 +1626,7 @@ $(function () {
         marcarLinhaAtiva();
 
         if (focoGrupoId) {
-            const $input =$(`.quick-add-input[data-group-id="${focoGrupoId}"]`);
+            const $input = $(`.quick-add-input[data-group-id="${focoGrupoId}"]`);
             if ($input.length) {
                 setTimeout(() => $input.trigger("focus"), 50);
             }
@@ -1737,11 +1738,6 @@ $(function () {
         renderizar();
     });
 
-    $(document).on("focusin", ".date-input", function () {
-        valorAnteriorInput = $(this).val();
-    });
-
-
     // Alteração de datas (planejado e real).
     // Enquanto a tarefa não tem nenhuma data real preenchida, ou ainda não existe linha de base
     // salva, a alteração é aplicada direto, sem aviso: ainda estamos construindo o cronograma e
@@ -1750,6 +1746,10 @@ $(function () {
     // move atividades dependentes.
     // Exceção: término real depois do fim planejado (atraso) sempre pede confirmação, mesmo sem
     // linha de base, pois a data pode ter sido digitada errada.
+    //
+    // Origem da alteração:
+    // - Calendário (clique na data): o 'change' dispara na hora e é processado imediatamente.
+    // - Teclado: espera o blur (focusout), para não alertar com dígitos parciais.
     function processarAlteracaoData(inputEl, e) {
         const $input = $(inputEl);
         const id = Number($input.closest("tr").data("id"));
@@ -1758,35 +1758,32 @@ $(function () {
 
         const val = $input.val().trim();
 
-        // 1. Enquanto digita pelo teclado, se o ano ainda estiver incompleto (< 2000), não processa nada
+        // 1. Ano incompleto ou fora do intervalo: ainda está digitando
         if (val !== "") {
             if (!/^\d{4}-\d{2}-\d{2}$/.test(val)) return;
             const ano = Number(val.split("-")[0]);
             if (ano < 2000 || ano > 2099) return;
         }
 
-        // 2. Se o evento disparou por 'change' mas o usuário AINDA está com o foco no input (digitando no teclado),
-        // aguarda o usuário terminar e retirar o foco (blur/focusout)
-        if (e.type === "change" && $input.is(":focus")) {
-            return;
-        }
+        // 2. Só espera o blur quando a mudança veio do TECLADO.
+        // Seleção pelo calendário não passa por keydown, então é processada na hora.
+        if (e.type === "change" && digitandoNoTeclado && $input.is(":focus")) return;
 
         const $container = $input.closest(".date-range");
 
-        // 3. Se o foco está apenas passando de uma data para outra dentro da mesma linha (ex: saiu do início e foi para o fim),
-        // salva provisoriamente o que foi digitado no estado sem disparar alertas nem recriar a tela
-        const proximoFoco = e.relatedTarget || document.activeElement;
-        if (proximoFoco && $container[0] && $container[0].contains(proximoFoco)) {
-            salvarValorNoEstado(inputEl);
-            return;
+        // 3. Foco passando do início para o fim (ou vice-versa): salva sem alertar.
+        // Vale apenas para focusout; no change do calendário o activeElement é o próprio input.
+        if (e.type === "focusout") {
+            const proximoFoco = e.relatedTarget || document.activeElement;
+            if (proximoFoco && $container[0] && $container[0].contains(proximoFoco)) {
+                salvarValorNoEstado(inputEl);
+                return;
+            }
         }
 
-        // 4. Validação: A data final não pode ser menor que a inicial (somente quando ambas estiverem completas)
-        const $inputIni = $container.find('[data-index="0"]');
-        const $inputFim = $container.find('[data-index="1"]');
-        const dataInicial = $inputIni.val() ? $inputIni.val().trim() : "";
-        const dataFinal = $inputFim.val() ? $inputFim.val().trim() : "";
-
+        // 4. Validação: data final não pode ser menor que a inicial
+        const dataInicial = ($container.find('[data-index="0"]').val() || "").trim();
+        const dataFinal = ($container.find('[data-index="1"]').val() || "").trim();
         const anoIni = dataInicial ? Number(dataInicial.split("-")[0]) : 0;
         const anoFim = dataFinal ? Number(dataFinal.split("-")[0]) : 0;
         const ambasCompletas = dataInicial && dataFinal && anoIni >= 2000 && anoFim >= 2000;
@@ -1797,7 +1794,8 @@ $(function () {
             return;
         }
 
-        if (val === valorAnteriorInput) return;
+        // Nada mudou, ou já existe uma confirmação aberta (evita modal duplicado no focusout seguinte)
+        if (val === valorAnteriorInput || acaoPendenteAjuste) return;
 
         const field = $input.data("field");
         const index = Number($input.data("index"));
@@ -1819,6 +1817,9 @@ $(function () {
         const temReal = !!draftTask?.real?.some((d) => d && d.trim() !== "");
 
         const aplicarAjuste = () => {
+            valorAnteriorInput = val;
+            digitandoNoTeclado = false;
+
             salvarValorNoEstado(inputEl);
             if (task && task[field]) {
                 task[field][index] = val;
@@ -1890,13 +1891,36 @@ $(function () {
         exibirModalConfirmacaoAjuste(comparaProjeto ? diferencaDiasProjeto : null, qtdDependentesAfetadas, textoAtraso);
     }
 
-    $(document).on("change focusout", ".date-input", function (e) {
-        processarAlteracaoData(this, e);
+    $(document).on("focusin", ".date-input", function () {
+        valorAnteriorInput = $(this).val();
+        digitandoNoTeclado = false;
+    });
+
+    // Clique no input/ícone do calendário: a próxima mudança vem do calendário, não do teclado
+    $(document).on("mousedown", ".date-input", function () {
+        digitandoNoTeclado = false;
     });
 
     $(document).on("keydown", ".date-input", function (e) {
         if (e.key === "Enter") {
             $(this).trigger("blur");
+            return;
+        }
+
+        if (!["Tab", "Escape", "Shift"].includes(e.key)) {
+            digitandoNoTeclado = true;
+        }
+    });
+
+    $(document).on("change focusout", ".date-input", function (e) {
+        processarAlteracaoData(this, e);
+    });
+
+    // Fechou o modal de confirmação sem usar os botões (X, ESC, clique fora): cancela e libera
+    $(document).on("hidden.bs.modal", "#modalConfirmarAjuste", function () {
+        if (acaoPendenteAjuste) {
+            acaoPendenteAjuste.cancelar?.();
+            acaoPendenteAjuste = null;
         }
     });
 
@@ -1922,8 +1946,9 @@ $(function () {
 
     $(document).on("click", "#btnConfirmarAjusteData", function () {
         if (acaoPendenteAjuste && typeof acaoPendenteAjuste.executar === "function") {
-            acaoPendenteAjuste.executar();
+            const acao = acaoPendenteAjuste;
             acaoPendenteAjuste = null;
+            acao.executar();
         }
         const modalEl = document.getElementById("modalConfirmarAjuste");
         if (modalEl) {
@@ -1934,8 +1959,9 @@ $(function () {
 
     $(document).on("click", "#btnCancelarAjusteData", function () {
         if (acaoPendenteAjuste && typeof acaoPendenteAjuste.cancelar === "function") {
-            acaoPendenteAjuste.cancelar();
+            const acao = acaoPendenteAjuste;
             acaoPendenteAjuste = null;
+            acao.cancelar();
         }
     });
 
@@ -1958,9 +1984,10 @@ $(function () {
         reordenarNumeracao();
         renderizar();
 
-        const $novoInput =$(`input[data-id="${proximoId}"][data-field="name"]`);
+        const $novoInput = $(`input[data-id="${proximoId}"][data-field="name"]`);
 
-        if ($novoInput.length) {$novoInput[0].scrollIntoView({ behavior: "smooth", block: "center" });
+        if ($novoInput.length) {
+            $novoInput[0].scrollIntoView({ behavior: "smooth", block: "center" });
             setTimeout(() => $novoInput.trigger("focus").select(), 150);
         }
     });
@@ -1993,9 +2020,9 @@ $(function () {
         const grupos = marcadas.filter((t) => t.group);
         const qtd = idsParaExcluir.length;
 
-        const $modalTitle =$("#deleteActivityModalLabel");
-        const $iconContainer =$("#deleteActivityModal .delete-modal-icon");
-        const $msgText =$("#deleteActivityModal .modal-body p:last");
+        const $modalTitle = $("#deleteActivityModalLabel");
+        const $iconContainer = $("#deleteActivityModal .delete-modal-icon");
+        const $msgText = $("#deleteActivityModal .modal-body p:last");
 
         $("#deleteActivityName").text(qtd === 1 ? marcadas[0].name : `${qtd} itens selecionados`);
 
@@ -2097,7 +2124,7 @@ $(function () {
             tasks: JSON.parse(JSON.stringify(estado.tasks))
         });
 
-        const $lista =$("#listaBaselines").empty();
+        const $lista = $("#listaBaselines").empty();
         estado.baselines.forEach((b) => {
             $lista.append(`
                 <li class="list-group-item d-flex justify-content-between align-items-center">
