@@ -1448,7 +1448,6 @@ $(function () {
 
         const $body = $("#timelineBody").empty().css({ width: `${totalWidth}px`, position: "relative" });
         const posHoje = posicaoParaData(paraISO(new Date()));
-        let grupoAtualId = null;
 
         estado.tasks.forEach((tarefa, index) => {
             const $row = $(`<div class="timeline-row ${tarefa.group ? "group" : ""}" data-id="${tarefa.id}" style="width:${totalWidth}px;"></div>`);
@@ -1461,6 +1460,24 @@ $(function () {
             const baselineDates = resumo
                 ? (compararLinhaBase ? resumo.baseline : resumo.planned)
                 : (compararLinhaBase ? (tarefa.baseline || tarefa.planned) : tarefa.planned);
+
+            const planejadoEhAtrasado = !compararLinhaBase && verificarAtraso(tarefa);
+
+            const planejadoNoCaminhoCritico =
+                !compararLinhaBase &&
+                !tarefa.group &&
+                !!tarefa.critical &&
+                !planejadoEhAtrasado;
+
+            const classeBarraPlanejada = compararLinhaBase || tarefa.group
+                ? "bar baseline-bar"
+                : `bar baseline-bar${
+                    planejadoEhAtrasado
+                        ? " overdue"
+                        : planejadoNoCaminhoCritico
+                            ? " critical"
+                            : ""
+                }`;
 
             if (baselineDates?.[0]) {
                 const fimBase = baselineDates[1] || baselineDates[0];
@@ -1478,7 +1495,7 @@ $(function () {
                 } else if (baselineDates[1]) {
                     $row.append(`
                         <div
-                            class="bar baseline-bar"
+                            class="${classeBarraPlanejada}"
                             style="left:${posicaoParaData(baselineDates[0])}px; width:${larguraParaIntervalo(baselineDates[0], baselineDates[1])}px;"
                             data-bs-toggle="tooltip"
                             data-bs-title="Linha de Base${tarefa.group ? " (consolidado)" : ""}: ${formatarDataBR(baselineDates[0])} a ${formatarDataBR(baselineDates[1])}"
@@ -1525,8 +1542,9 @@ $(function () {
                     `);
                 } else {
                     let barClass = tarefa.group ? "bar group-bar" : "bar task-bar";
-                    if (noCaminhoCritico) barClass += " critical";
-                    else if (emAtraso) barClass += " overdue";
+
+                    if (emAtraso) barClass += " overdue";
+                    else if (noCaminhoCritico) barClass += " critical";
 
                     const sufixo = `${tarefa.group ? " (consolidado)" : ""}${noCaminhoCritico ? " (Caminho crítico)" : ""} (${pct}%) - ${formatarDataBR(dataInicioBarra)} a ${formatarDataBR(dataFimBarra)}`;
 
