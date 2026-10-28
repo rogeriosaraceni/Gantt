@@ -839,31 +839,16 @@ $(function () {
 
         const [iniPlan, fimPlan] = tarefa.planned || [];
         const [iniReal, fimReal] = tarefa.real || [];
+        const candidatas = [fimPlan, fimReal];
 
-        // Se a atividade já foi concluída, utiliza o término real.
-        if (fimReal) return fimReal;
-
-        // Se já começou, mantém a projeção baseada na duração planejada.
-        if (iniReal && iniPlan && fimPlan) {
-            const duracao = diferencaDias(
-                analisarData(iniPlan),
-                analisarData(fimPlan)
-            );
-
-            const fimProjetado = paraISO(
-                adicionarDias(analisarData(iniReal), duracao)
-            );
-
-            if (fimProjetado > fimPlan) {
-                return fimProjetado;
-            }
+        // Já começou e ainda não terminou: projeta o fim mantendo a duração planejada
+        if (iniReal && !fimReal && iniPlan && fimPlan) {
+            const duracao = diferencaDias(analisarData(iniPlan), analisarData(fimPlan));
+            candidatas.push(paraISO(adicionarDias(analisarData(iniReal), duracao)));
         }
 
-        // Se não existe término real nem projeção posterior,
-        // utiliza o término planejado, mesmo que esteja vencido.
-        return fimPlan || "";
+        return candidatas.filter(Boolean).sort().pop() || "";
     }
-
 
     // "ids" são as tarefas que devem ser SEMPRE recalculadas a partir das predecessoras
     // (ex.: quando a predecessora acabou de ser escolhida). Tarefas fora dessa lista só são
